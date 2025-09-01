@@ -1,0 +1,13 @@
+node_modules
+
+.env*
+
+.eslint*
+
+.git*
+
+.prettier*
+
+Dockerfile
+
+*.md
