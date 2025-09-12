@@ -4,21 +4,15 @@ import {
   authorizeLogic,
   getToken,
 } from 'src/auth/logics/auth.logic';
-import { ManagerRepository } from 'src/manager/entities/repositories/manager.repository';
 import { Permissions } from '../decorators/permissions.decorator';
 import { Reflector } from '@nestjs/core';
-import { ExpertRepository } from 'src/expert/entities/repositories/expert.repository';
-import { TeacherRepository } from 'src/teacher/entities/repositories/teacher.repository';
-import { StudentRepository } from 'src/student/entities/repositories/student.repository';
+import { UserRepository } from 'src/user/entities/repositories/student.repository';
 
 @Injectable()
 export class HasAccessGuard implements CanActivate {
   constructor(
     private reflector: Reflector,
-    private managerRepo: ManagerRepository,
-    private expertRepo: ExpertRepository,
-    private teacherRepo: TeacherRepository,
-    private studentRepo: StudentRepository,
+    private userRepo: UserRepository,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -31,10 +25,7 @@ export class HasAccessGuard implements CanActivate {
     }
 
     const user = await authenticateLogic(token, {
-      getManager: async (userObj) => this.managerRepo.findOne(userObj),
-      getExpert: async (userObj) => this.expertRepo.findOne(userObj),
-      getTeacher: async (userObj) => this.teacherRepo.findOne(userObj),
-      getStudent: async (userObj) => this.studentRepo.findOne(userObj),
+      getUser: async (userObj) => this.userRepo.findOne(userObj),
     });
 
     if (!user) {

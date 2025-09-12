@@ -1,37 +1,15 @@
 import * as jwt from 'jsonwebtoken';
 import { authConfigs } from '../auth.configs';
-import { Manager } from 'src/manager/entities/manager.entity';
 import { RolesEnum } from '../enums/roles.enum';
 import { PermissionsEnum } from '../enums/permissions.enum';
-import { Expert } from 'src/expert/entities/expert.entity';
-import { Teacher } from 'src/teacher/entities/teacher.entity';
-import { Student } from 'src/student/entities/student.entity';
+import { User } from 'src/user/entities/user.entity';
 
 export async function authenticateLogic(
   token: string,
-  getUserFns: {
-    getManager: (userObj: {
-      nationalCode: string;
-      password: string;
-    }) => Promise<Manager | null>;
-    getExpert: (userObj: {
-      nationalCode: string;
-      password: string;
-    }) => Promise<Expert | null>;
-    getTeacher: (userObj: {
-      nationalCode: string;
-      password: string;
-    }) => Promise<Teacher | null>;
-    getStudent: (userObj: {
-      nationalCode: string;
-      password: string;
-    }) => Promise<Student | null>;
-  },
+  getUserFn,
 ): Promise<
   | {
-      user: Omit<Manager | Expert | Teacher | Student, 'permissions'> & {
-        permissions: PermissionsEnum[];
-      };
+      user: User;
       role: RolesEnum;
     }
   | false
@@ -47,92 +25,31 @@ export async function authenticateLogic(
     return false;
   }
 
-  if (userObj.role === RolesEnum.MANAGER) {
-    const user = await authenticateModelLogic<Manager>(
-      { username: userObj.username, password: userObj.password },
-      getUserFns.getManager,
-    );
+  const user = await authenticateModelLogic(
+    { username: userObj.username, password: userObj.password },
+    getUserFn,
+  );
 
-    if (!user) {
-      return false;
-    }
-
-    return {
-      user: {
-        ...user,
-        permissions: userObj.permissions || [],
-      },
-      role: RolesEnum.MANAGER,
-    };
+  if (!user) {
+    return false;
   }
 
-  if (userObj.role === RolesEnum.EXPERT) {
-    const user = await authenticateModelLogic<Expert>(
-      { username: userObj.username, password: userObj.password },
-      getUserFns.getExpert,
-    );
-
-    if (!user) {
-      return false;
-    }
-
-    return {
-      user: {
-        ...user,
-        permissions: userObj.permissions || [],
-      },
-      role: RolesEnum.EXPERT,
-    };
-  }
-
-  if (userObj.role === RolesEnum.TEACHER) {
-    const user = await authenticateModelLogic<Teacher>(
-      { username: userObj.username, password: userObj.password },
-      getUserFns.getTeacher,
-    );
-
-    if (!user) {
-      return false;
-    }
-
-    return {
-      user: {
-        ...user,
-        permissions: userObj.permissions || [],
-      },
-      role: RolesEnum.TEACHER,
-    };
-  }
-
-  if (userObj.role === RolesEnum.STUDENT) {
-    const user = await authenticateModelLogic<Student>(
-      { username: userObj.username, password: userObj.password },
-      getUserFns.getStudent,
-    );
-
-    if (!user) {
-      return false;
-    }
-
-    return {
-      user: {
-        ...user,
-        permissions: userObj.permissions || [],
-      },
-      role: RolesEnum.STUDENT,
-    };
-  }
-
-  return false;
+  return {
+    user: {
+      ...user,
+      permissions: userObj.permissions || [],
+    },
+    role: RolesEnum.ADMIN,
+  };
 }
 
-async function authenticateModelLogic<T extends Manager | Expert | Student>(
+async function authenticateModelLogic(
   userObj: { username: string; password: string },
   getUser: (userObj: {
     nationalCode: string;
     password: string;
-  }) => Promise<T | null>,
-): Promise<T | false> {
+  }) => Promise<User | null>,
+): Promise<User | false> {
   const user = await getUser({
     nationalCode: userObj.username,
     password: userObj.password,

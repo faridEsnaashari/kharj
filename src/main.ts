@@ -8,7 +8,7 @@ import { UncaughtExceptionFilter } from './common/filters/uncaught-exceptions.fi
 import { HttpExceptionFilter } from './common/filters/http-exceptions.filter';
 import { ResponseInterceptor } from './common/interseptors/response.interseptor';
 import { NestExpressApplication } from '@nestjs/platform-express';
-import { resolve } from 'path';
+//import { resolve } from 'path';
 
 async function bootstrap() {
   config();
@@ -17,7 +17,7 @@ async function bootstrap() {
   });
   app.useLogger(app.get(Logger));
 
-//  app.useStaticAssets(resolve('./', 'public'));
+  //  app.useStaticAssets(resolve('./', 'public'));
 
   app.useGlobalFilters(
     new UncaughtExceptionFilter(),
