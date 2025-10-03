@@ -61,8 +61,7 @@ export class UserService {
   //
   //  async uploadBill(id: number, file: Express.Multer.File) {
   //    const savedFile = await saveUploadedFile(
-  //      getFileName(file.originalname, id),
-  //      file.buffer,
+  //      getFileName(file.originalname, id), //      file.buffer,
   //      'users-bill',
   //    );
   //

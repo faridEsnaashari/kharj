@@ -1,10 +1,10 @@
 import { appConfigs } from 'src/app.configs';
-import { getRandomNumber } from 'src/common/tools/random.tool';
+import { generateRandomNumber } from 'src/common/tools/random.tool';
 import * as fs from 'fs';
 import * as path from 'node:path';
 
 export function createRandomFileName(id: number) {
-  return `${id}-${Date.now()}-${getRandomNumber()}`;
+  return `${id}-${Date.now()}-${generateRandomNumber()}`;
 }
 
 export function getFileName(originFileName: string, id: number = 0) {

@@ -11,6 +11,7 @@ import { UserService } from './user.service';
 @Controller('user')
 export class UserController {
   constructor(private userService: UserService) {}
+
   @Get(':id')
   //  @UseGuards(HasAccessGuard)
   //  @Permissions([PermissionsEnum.FIND_STUDENT])

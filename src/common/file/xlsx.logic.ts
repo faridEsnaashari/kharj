@@ -1,7 +1,7 @@
 import * as xlsx from 'xlsx';
 import { Logger } from '../tools/pino/logger.tool';
 import { saveTempPublicFile } from './files.logic';
-import { getRandomNumber } from '../tools/random.tool';
+import { generateRandomNumber } from '../tools/random.tool';
 
 export function xlsxToJson<T>(filePath: string): T[] | false {
   try {
@@ -30,7 +30,7 @@ export async function jsonToXlsx(data: unknown[]): Promise<string | false> {
 
     const buffer = xlsx.write(workbook, { bookType: 'xlsx', type: 'buffer' });
 
-    const fileName = Date.now() + '' + getRandomNumber(10) + '.xlsx';
+    const fileName = Date.now() + '' + generateRandomNumber(10) + '.xlsx';
     return saveTempPublicFile(fileName, buffer);
   } catch (err) {
     const logger = new Logger('XLSX_EXCEPTION');
