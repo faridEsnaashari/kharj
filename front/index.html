@@ -1,636 +1,762 @@
-
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>API Tester</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      margin: 1rem;
-      background-color: #f4f7f9;
-      color: #333;
-    }
-    .container {
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>API Tester</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 1rem;
+        background-color: #f4f7f9;
+        color: #333;
+      }
+      .container {
         max-width: 800px;
         margin: 0 auto;
         padding: 1rem;
         background-color: #fff;
         border-radius: 12px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-    }
-    h2 {
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      }
+      h2 {
         color: #0056b3;
-    }
-    /* Hamburger menu styles */
-    .menu-toggle {
-      font-size: 24px;
-      background: none;
-      border: none;
-      cursor: pointer;
-      margin-bottom: 1rem;
-      color: #0056b3;
-    }
-    .menu-dropdown {
-      display: none;
-      flex-direction: column;
-      background-color: #f0f0f0;
-      position: absolute;
-      top: 50px;
-      left: 10px;
-      z-index: 10;
-      border-radius: 8px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
-    }
-    .menu-dropdown button {
-      width: 100%;
-      padding: 12px;
-      border: none;
-      background-color: white;
-      text-align: left;
-      cursor: pointer;
-      color: #0056b3;
-      font-weight: bold;
-      transition: background-color 0.2s ease;
-    }
-    .menu-dropdown button:hover {
+      }
+      /* Hamburger menu styles */
+      .menu-toggle {
+        font-size: 24px;
+        background: none;
+        border: none;
+        cursor: pointer;
+        margin-bottom: 1rem;
+        color: #0056b3;
+      }
+      .menu-dropdown {
+        display: none;
+        flex-direction: column;
+        background-color: #f0f0f0;
+        position: absolute;
+        top: 50px;
+        left: 10px;
+        z-index: 10;
+        border-radius: 8px;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+      }
+      .menu-dropdown button {
+        width: 100%;
+        padding: 12px;
+        border: none;
+        background-color: white;
+        text-align: left;
+        cursor: pointer;
+        color: #0056b3;
+        font-weight: bold;
+        transition: background-color 0.2s ease;
+      }
+      .menu-dropdown button:hover {
         background-color: #e2e6ea;
-    }
-    /* Tabs container */
-    .tab-content {
-      margin-top: 1rem;
-    }
-    /* Hide tabs by default */
-    .tab {
-      display: none;
-      padding: 1.5rem;
-      border: 1px solid #e0e0e0;
-      border-radius: 8px;
-    }
-    .tab.active {
-      display: block;
-    }
-    label {
-      display: block;
-      margin: 0.75rem 0 0.25rem;
-      font-weight: bold;
-      color: #555;
-    }
-    input[type="text"], input[type="password"], input[type="number"], select {
-      width: 100%;
-      padding: 10px;
-      box-sizing: border-box;
-      border: 1px solid #ccc;
-      border-radius: 6px;
-      font-size: 1rem;
-    }
-    button.submit-btn {
-      margin-top: 1.5rem;
-      padding: 10px 20px;
-      cursor: pointer;
-      background-color: #007bff;
-      color: white;
-      border: none;
-      border-radius: 6px;
-      font-size: 1rem;
-      transition: background-color 0.2s ease;
-    }
-    button.submit-btn:hover {
+      }
+      /* Tabs container */
+      .tab-content {
+        margin-top: 1rem;
+      }
+      /* Hide tabs by default */
+      .tab {
+        display: none;
+        padding: 1.5rem;
+        border: 1px solid #e0e0e0;
+        border-radius: 8px;
+      }
+      .tab.active {
+        display: block;
+      }
+      label {
+        display: block;
+        margin: 0.75rem 0 0.25rem;
+        font-weight: bold;
+        color: #555;
+      }
+      input[type='text'],
+      input[type='password'],
+      input[type='number'],
+      select {
+        width: 100%;
+        padding: 10px;
+        box-sizing: border-box;
+        border: 1px solid #ccc;
+        border-radius: 6px;
+        font-size: 1rem;
+      }
+      button.submit-btn {
+        margin-top: 1.5rem;
+        padding: 10px 20px;
+        cursor: pointer;
+        background-color: #007bff;
+        color: white;
+        border: none;
+        border-radius: 6px;
+        font-size: 1rem;
+        transition: background-color 0.2s ease;
+      }
+      button.submit-btn:hover {
         background-color: #0056b3;
-    }
-    #result, .result-box {
-      margin-top: 1rem;
-      white-space: pre-wrap;
-      background: #f9f9f9;
-      border: 1px solid #ddd;
-      padding: 15px;
-      max-height: 300px;
-      overflow-y: auto;
-      border-radius: 8px;
-      font-family: 'Courier New', Courier, monospace;
-      color: #333;
-    }
-    #signin-result {
+      }
+      #result,
+      .result-box {
+        margin-top: 1rem;
+        white-space: pre-wrap;
+        background: #f9f9f9;
+        border: 1px solid #ddd;
+        padding: 15px;
+        max-height: 300px;
+        overflow-y: auto;
+        border-radius: 8px;
+        font-family: 'Courier New', Courier, monospace;
+        color: #333;
+      }
+      #signin-result {
         color: #d9534f;
         font-weight: bold;
         margin-top: 0.5rem;
-    }
-    /* Responsive adjustments */
-    @media (min-width: 600px) {
-      .menu-dropdown {
-        position: static;
-        display: flex; /* Changed from !important to flex */
-        flex-direction: row;
-        background: none;
-        box-shadow: none;
-        justify-content: space-around;
-        padding: 0;
       }
-      .menu-dropdown button {
-        background: none;
-        color: black;
-        padding: 12px;
-        border: none;
-        font-weight: normal;
-        border-bottom: 2px solid transparent;
-        transition: border-bottom 0.2s ease;
+      /* Responsive adjustments */
+      @media (min-width: 600px) {
+        .menu-dropdown {
+          position: static;
+          display: flex; /* Changed from !important to flex */
+          flex-direction: row;
+          background: none;
+          box-shadow: none;
+          justify-content: space-around;
+          padding: 0;
+        }
+        .menu-dropdown button {
+          background: none;
+          color: black;
+          padding: 12px;
+          border: none;
+          font-weight: normal;
+          border-bottom: 2px solid transparent;
+          transition: border-bottom 0.2s ease;
+        }
+        .menu-dropdown button.active {
+          border-bottom: 2px solid #0056b3;
+          font-weight: bold;
+        }
+        .menu-toggle {
+          display: none;
+        }
+        .tab-content {
+          margin-top: 2rem;
+        }
       }
-      .menu-dropdown button.active {
-        border-bottom: 2px solid #0056b3;
-        font-weight: bold;
-      }
-      .menu-toggle {
-        display: none;
-      }
-      .tab-content {
-        margin-top: 2rem;
-      }
-    }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <h2>API Tester</h2>
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h2>API Tester</h2>
 
-    <button class="submit-btn" id="clear-storage-btn" style="float: right; background-color: #d9534f; color: white; margin-top: -2.5rem;">Clear Storage</button>
+      <button
+        class="submit-btn"
+        id="clear-storage-btn"
+        style="
+          float: right;
+          background-color: #d9534f;
+          color: white;
+          margin-top: -2.5rem;
+        "
+      >
+        Clear Storage
+      </button>
 
-    <!-- Sign In Form -->
-    <div id="signin-form">
-      <label>Username:
-        <input type="text" id="username" autocomplete="username" />
-      </label>
-      <label>Password:
-        <input type="password" id="password" autocomplete="current-password" />
-      </label>
-      <button class="submit-btn" id="signin-btn">Sign In</button>
-      <p id="signin-result"></p>
-    </div>
+      <!-- Sign In Form -->
+      <div id="signin-form">
+        <label
+          >Username:
+          <input type="text" id="username" autocomplete="username" />
+        </label>
+        <label
+          >Password:
+          <input
+            type="password"
+            id="password"
+            autocomplete="current-password"
+          />
+        </label>
+        <button class="submit-btn" id="signin-btn">Sign In</button>
+        <p id="signin-result"></p>
+      </div>
 
-    <!-- Main content container, initially hidden -->
-    <div id="main-app-content" style="display:none;">
-      <!-- Hamburger Menu -->
-      <button class="menu-toggle" aria-label="Toggle menu" id="menu-toggle">&#9776;</button>
-      <nav class="menu-dropdown" id="menu-dropdown">
-        <button data-tab="payment">Payment</button>
-        <button data-tab="account">Create Account</button>
-        <button data-tab="incomes">Incomes</button>
-        <button data-tab="exchange">Exchange</button>
-      </nav>
+      <!-- Main content container, initially hidden -->
+      <div id="main-app-content" style="display: none">
+        <!-- Hamburger Menu -->
+        <button class="menu-toggle" aria-label="Toggle menu" id="menu-toggle">
+          &#9776;
+        </button>
+        <nav class="menu-dropdown" id="menu-dropdown">
+          <button data-tab="payment">Payment</button>
+          <button data-tab="account">Create Account</button>
+          <button data-tab="incomes">Incomes</button>
+          <button data-tab="exchange">Exchange</button>
+        </nav>
 
-      <!-- Tab Contents -->
-      <div class="tab-content">
-        <!-- Payment Tab -->
-        <div class="tab" id="payment">
-          <h3>Payment</h3>
-          <label>Price:
-            <input type="number" id="payment-price" min="0" />
-          </label>
-          <label>Bank:
-            <select id="payment-bank"></select>
-          </label>
-          <label>Category:
-            <select id="payment-category"></select>
-          </label>
-          <label>Description:
-            <input type="text" id="payment-description" />
-          </label>
-          <label>Is Fun:
-            <select id="payment-is_fun">
-              <option value="0">No</option>
-              <option value="1">Yes</option>
-            </select>
-          </label>
-          <label>Is Maman:
-            <select id="payment-is_maman">
-              <option value="0">No</option>
-              <option value="1">Yes</option>
-            </select>
-          </label>
-          <button class="submit-btn" id="payment-submit">Submit Payment</button>
-          <pre id="payment-result" class="result-box"></pre>
-        </div>
+        <!-- Tab Contents -->
+        <div class="tab-content">
+          <!-- Payment Tab -->
+          <div class="tab" id="payment">
+            <h3>Payment</h3>
+            <label
+              >Price:
+              <input type="number" id="payment-price" min="0" />
+            </label>
+            <label
+              >Bank:
+              <select id="payment-bank"></select>
+            </label>
+            <label
+              >Category:
+              <select id="payment-category"></select>
+            </label>
+            <label
+              >Description:
+              <input type="text" id="payment-description" />
+            </label>
+            <label
+              >Is Fun:
+              <select id="payment-is_fun">
+                <option value="0">No</option>
+                <option value="1">Yes</option>
+              </select>
+            </label>
+            <label
+              >Is Maman:
+              <select id="payment-is_maman">
+                <option value="0">No</option>
+                <option value="1">Yes</option>
+              </select>
+            </label>
+            <button class="submit-btn" id="payment-submit">
+              Submit Payment
+            </button>
+            <pre id="payment-result" class="result-box"></pre>
+          </div>
 
-        <!-- Create Account Tab -->
-        <div class="tab" id="account">
-          <h3>Create Account</h3>
-          <label>Balance:
-            <input type="number" id="account-ballance" min="0" />
-          </label>
-          <label>Owned By:
-            <select id="account-owned_by"></select>
-          </label>
-          <label>Bank:
-            <select id="account-bank"></select>
-          </label>
-          <label>Priority:
-            <input type="number" id="account-priority" min="0" />
-          </label>
-          <button class="submit-btn" id="account-submit">Create Account</button>
-          <pre id="account-result" class="result-box"></pre>
-        </div>
+          <!-- Create Account Tab -->
+          <div class="tab" id="account">
+            <h3>Create Account</h3>
+            <label
+              >Balance:
+              <input type="number" id="account-ballance" min="0" />
+            </label>
+            <label
+              >Owned By:
+              <select id="account-owned_by"></select>
+            </label>
+            <label
+              >Bank:
+              <select id="account-bank"></select>
+            </label>
+            <label
+              >Priority:
+              <input type="number" id="account-priority" min="0" />
+            </label>
+            <button class="submit-btn" id="account-submit">
+              Create Account
+            </button>
+            <pre id="account-result" class="result-box"></pre>
+          </div>
 
-        <!-- Incomes Tab -->
-        <div class="tab" id="incomes">
-          <h3>Incomes</h3>
-          <label>User:
-            <select id="income-user"></select>
-          </label>
-          <label>Balance:
-            <input type="number" id="income-ballance" min="0" />
-          </label>
-          <label>Description:
-            <input type="text" id="income-description" />
-          </label>
-          <label>Category:
-            <select id="income-category"></select>
-          </label>
-          <label>Bank:
-            <select id="income-bank"></select>
-          </label>
-          <button class="submit-btn" id="income-submit">Submit Income</button>
-          <pre id="income-result" class="result-box"></pre>
-        </div>
+          <!-- Incomes Tab -->
+          <div class="tab" id="incomes">
+            <h3>Incomes</h3>
+            <label
+              >User:
+              <select id="income-user"></select>
+            </label>
+            <label
+              >Balance:
+              <input type="number" id="income-ballance" min="0" />
+            </label>
+            <label
+              >Description:
+              <input type="text" id="income-description" />
+            </label>
+            <label
+              >Category:
+              <select id="income-category"></select>
+            </label>
+            <label
+              >Bank:
+              <select id="income-bank"></select>
+            </label>
+            <button class="submit-btn" id="income-submit">Submit Income</button>
+            <pre id="income-result" class="result-box"></pre>
+          </div>
 
-        <!-- Exchange Tab -->
-        <div class="tab" id="exchange">
-          <h3>Exchange</h3>
-          <label>From Account (Bank):
-            <select id="exchange-from-account"></select>
-          </label>
-          <label>To Account (Bank):
-            <select id="exchange-to-account"></select>
-          </label>
-          <label>Amount:
-            <input type="number" id="exchange-amount" min="0" />
-          </label>
-          <label>From Owner:
-            <select id="exchange-from-owner"></select>
-          </label>
-          <label>To Owner:
-            <select id="exchange-to-owner"></select>
-          </label>
-          <button class="submit-btn" id="exchange-submit">Submit Exchange</button>
-          <pre id="exchange-result" class="result-box"></pre>
+          <!-- Exchange Tab -->
+          <div class="tab" id="exchange">
+            <h3>Exchange</h3>
+            <label
+              >From Account (Bank):
+              <select id="exchange-from-account"></select>
+            </label>
+            <label
+              >To Account (Bank):
+              <select id="exchange-to-account"></select>
+            </label>
+            <label
+              >Amount:
+              <input type="number" id="exchange-amount" min="0" />
+            </label>
+            <label
+              >From Owner:
+              <select id="exchange-from-owner"></select>
+            </label>
+            <label
+              >To Owner:
+              <select id="exchange-to-owner"></select>
+            </label>
+            <button class="submit-btn" id="exchange-submit">
+              Submit Exchange
+            </button>
+            <pre id="exchange-result" class="result-box"></pre>
+          </div>
         </div>
       </div>
     </div>
-  </div>
 
-  <script>
-    // Mappers
-    const bankMapper = {
-      rs: "RESALAT",
-      bm: "MELY",
-      sp: "SEPAH",
-      ps: "PASARGAD"
-    };
-    const categoryMapper = {
-      f: "FOOD",
-      gf: "GYM_FOOD",
-      s: "SMOKE",
-      h: "HOME",
-      c: "COFFE",
-      g: "GYM",
-      r: "RENT",
-      fr: "FRUIT",
-      l: "LOAN",
-      i: "INTERNET",
-      cm: "COSMETICS",
-      t: "TRANSFER",
-      cl: "CLOTHES",
-      ms: "MS",
-      n: "NEMIDOONAM",
-      co: "COWORK",
-      bd: "BEDEHI"
-    };
-    const incomeCategoryMapper = {
-      h: "HOGHOOGH",
-      ms:"MOSAEDEH",
-      bd: "BEDEHI",
-      vm: "LOAN"
-    };
+    <script>
+      // Mappers
+      const bankMapper = {
+        rs: 'RESALAT',
+        bm: 'MELY',
+        sp: 'SEPAH',
+        ps: 'PASARGAD',
+        bl: 'BLUE',
+        mf: 'MOFID',
+        bp: 'BITPIN',
+        nb: 'NOBITEX',
+      };
+      const categoryMapper = {
+        f: 'FOOD',
+        gf: 'GYM_FOOD',
+        s: 'SMOKE',
+        h: 'HOME',
+        c: 'COFFE',
+        g: 'GYM',
+        r: 'RENT',
+        fr: 'FRUIT',
+        l: 'LOAN',
+        i: 'INTERNET',
+        cm: 'COSMETICS',
+        t: 'TRANSFER',
+        cl: 'CLOTHES',
+        ms: 'MS',
+        n: 'NEMIDOONAM',
+        cw: 'COWORK',
+        bd: 'BEDEHI',
+      };
+      const incomeCategoryMapper = {
+        h: 'HOGHOOGH',
+        ms: 'MOSAEDEH',
+        bd: 'BEDEHI',
+        vm: 'LOAN',
+      };
 
-    // Cached token and related users
-    let token = localStorage.getItem('token') || null;
-    let relatedUsers = [];
+      // Cached token and related users
+      let token = localStorage.getItem('token') || null;
+      let relatedUsers = [];
 
-    // Elements
-    const signinForm = document.getElementById('signin-form');
-    const signinBtn = document.getElementById('signin-btn');
-    const signinResult = document.getElementById('signin-result');
-    const mainAppContent = document.getElementById('main-app-content');
-    const menuToggle = document.getElementById('menu-toggle');
-    const menuDropdown = document.getElementById('menu-dropdown');
-    const tabContent = document.querySelector('.tab-content');
-    const tabs = document.querySelectorAll('.tab');
+      // Elements
+      const signinForm = document.getElementById('signin-form');
+      const signinBtn = document.getElementById('signin-btn');
+      const signinResult = document.getElementById('signin-result');
+      const mainAppContent = document.getElementById('main-app-content');
+      const menuToggle = document.getElementById('menu-toggle');
+      const menuDropdown = document.getElementById('menu-dropdown');
+      const tabContent = document.querySelector('.tab-content');
+      const tabs = document.querySelectorAll('.tab');
 
-    // Show/Hide tabs based on data-tab attribute
-    function showTab(tabId) {
-      tabs.forEach(tab => {
-        tab.classList.toggle('active', tab.id === tabId);
-      });
-      // Toggle active state for menu buttons
-      menuDropdown.querySelectorAll('button[data-tab]').forEach(btn => {
-          btn.classList.toggle('active', btn.getAttribute('data-tab') === tabId);
-      });
-      // On mobile, close the menu after selecting a tab
-      if (window.innerWidth < 600) {
-        menuDropdown.style.display = 'none';
+      // Show/Hide tabs based on data-tab attribute
+      function showTab(tabId) {
+        tabs.forEach((tab) => {
+          tab.classList.toggle('active', tab.id === tabId);
+        });
+        // Toggle active state for menu buttons
+        menuDropdown.querySelectorAll('button[data-tab]').forEach((btn) => {
+          btn.classList.toggle(
+            'active',
+            btn.getAttribute('data-tab') === tabId,
+          );
+        });
+        // On mobile, close the menu after selecting a tab
+        if (window.innerWidth < 600) {
+          menuDropdown.style.display = 'none';
+        }
       }
-    }
 
-    // Fill select options helper
-    function fillSelect(selectElem, optionsObj) {
-      selectElem.innerHTML = '';
-      for (const [key, val] of Object.entries(optionsObj)) {
-        const option = document.createElement('option');
-        option.value = key;
-        option.textContent = val;
-        selectElem.appendChild(option);
-      }
-    }
-
-    // Fill related users select elements
-    function fillRelatedUsersSelects() {
-      ['account-owned_by', 'income-user', 'exchange-from-owner', 'exchange-to-owner'].forEach(id => {
-        const sel = document.getElementById(id);
-        sel.innerHTML = '';
-        relatedUsers.forEach(user => {
+      // Fill select options helper
+      function fillSelect(selectElem, optionsObj) {
+        selectElem.innerHTML = '';
+        for (const [key, val] of Object.entries(optionsObj)) {
           const option = document.createElement('option');
-          option.value = user.id;
-          option.textContent = user.name;
-          sel.appendChild(option);
+          option.value = key;
+          option.textContent = val;
+          selectElem.appendChild(option);
+        }
+      }
+
+      // Fill related users select elements
+      function fillRelatedUsersSelects() {
+        [
+          'account-owned_by',
+          'income-user',
+          'exchange-from-owner',
+          'exchange-to-owner',
+        ].forEach((id) => {
+          const sel = document.getElementById(id);
+          sel.innerHTML = '';
+          relatedUsers.forEach((user) => {
+            const option = document.createElement('option');
+            option.value = user.id;
+            option.textContent = user.name;
+            sel.appendChild(option);
+          });
+        });
+      }
+
+      // Fill all bank/category selects
+      function fillAllStaticSelects() {
+        // Payment tab
+        fillSelect(document.getElementById('payment-bank'), bankMapper);
+        fillSelect(document.getElementById('payment-category'), categoryMapper);
+        // Account tab
+        fillSelect(document.getElementById('account-bank'), bankMapper);
+        // Income tab
+        fillSelect(document.getElementById('income-bank'), bankMapper);
+        fillSelect(
+          document.getElementById('income-category'),
+          incomeCategoryMapper,
+        );
+        // Exchange tab
+        fillSelect(
+          document.getElementById('exchange-from-account'),
+          bankMapper,
+        );
+        fillSelect(document.getElementById('exchange-to-account'), bankMapper);
+      }
+
+      // Fetch related users
+      async function fetchRelatedUsers() {
+        try {
+          const res = await fetch(
+            'http://194.60.230.197:5679/webhook/related-users',
+            {
+              method: 'GET',
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+            },
+          );
+          if (!res.ok)
+            throw new Error(`Related users fetch failed: ${res.statusText}`);
+          relatedUsers = await res.json();
+          fillRelatedUsersSelects();
+        } catch (e) {
+          // Updated to use a result box instead of an alert
+          console.error('Failed to fetch related users:', e.message);
+        }
+      }
+
+      // Sign-in function
+      async function signIn(username, password) {
+        signinResult.textContent = 'Signing in...';
+        try {
+          const res = await fetch(
+            'http://194.60.230.197:5679/webhook/sign-ing',
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ username, password }),
+            },
+          );
+          const data = await res.json();
+          if (!res.ok || !data.token) {
+            throw new Error(data.message || 'Invalid credentials');
+          }
+          token = data.token;
+          localStorage.setItem('token', token);
+          signinResult.textContent = '';
+          return true;
+        } catch (e) {
+          signinResult.textContent = 'Sign-in failed: ' + e.message;
+          return false;
+        }
+      }
+
+      // Initialize app after sign-in or if token exists
+      async function initApp() {
+        signinForm.style.display = 'none';
+        mainAppContent.style.display = 'block';
+        await fetchRelatedUsers();
+        fillAllStaticSelects();
+        showTab('payment');
+      }
+
+      // Event listeners
+      signinBtn.addEventListener('click', async () => {
+        const username = document.getElementById('username').value.trim();
+        const password = document.getElementById('password').value;
+        if (!username || !password) {
+          signinResult.textContent = 'Please enter username and password.';
+          return;
+        }
+        const success = await signIn(username, password);
+        if (success) {
+          await initApp();
+        }
+      });
+
+      menuToggle.addEventListener('click', () => {
+        const isVisible = menuDropdown.style.display === 'flex';
+        menuDropdown.style.display = isVisible ? 'none' : 'flex';
+      });
+
+      // Add event listeners for all tabs
+      menuDropdown.querySelectorAll('button[data-tab]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          showTab(btn.getAttribute('data-tab'));
         });
       });
-    }
 
-    // Fill all bank/category selects
-    function fillAllStaticSelects() {
-      // Payment tab
-      fillSelect(document.getElementById('payment-bank'), bankMapper);
-      fillSelect(document.getElementById('payment-category'), categoryMapper);
-      // Account tab
-      fillSelect(document.getElementById('account-bank'), bankMapper);
-      // Income tab
-      fillSelect(document.getElementById('income-bank'), bankMapper);
-      fillSelect(document.getElementById('income-category'), incomeCategoryMapper);
-      // Exchange tab
-      fillSelect(document.getElementById('exchange-from-account'), bankMapper);
-      fillSelect(document.getElementById('exchange-to-account'), bankMapper);
-    }
+      // Payment submit
+      document
+        .getElementById('payment-submit')
+        .addEventListener('click', async () => {
+          const price = document.getElementById('payment-price').value.trim();
+          const bank = document.getElementById('payment-bank').value;
+          const category = document.getElementById('payment-category').value;
+          const description = document
+            .getElementById('payment-description')
+            .value.trim();
+          const is_fun = document.getElementById('payment-is_fun').value;
+          const is_maman = document.getElementById('payment-is_maman').value;
+          const resultBox = document.getElementById('payment-result');
 
-    // Fetch related users
-    async function fetchRelatedUsers() {
-      try {
-        const res = await fetch('http://194.60.230.197:5679/webhook/related-users', {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${token}`
+          if (!price || !bank || !category || !description) {
+            resultBox.textContent = 'Please fill all fields.';
+            return;
+          }
+
+          const text = [
+            price,
+            bank,
+            category,
+            description,
+            is_fun,
+            is_maman,
+          ].join(',');
+
+          try {
+            const res = await fetch(
+              'http://194.60.230.197:5679/webhook/payment',
+              {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify({ text }),
+              },
+            );
+            const data = await res.json();
+            resultBox.textContent = JSON.stringify(data, null, 2);
+          } catch (e) {
+            resultBox.textContent = 'Error: ' + e.message;
           }
         });
-        if (!res.ok) throw new Error(`Related users fetch failed: ${res.statusText}`);
-        relatedUsers = await res.json();
-        fillRelatedUsersSelects();
-      } catch (e) {
-        // Updated to use a result box instead of an alert
-        console.error('Failed to fetch related users:', e.message);
-      }
-    }
 
-    // Sign-in function
-    async function signIn(username, password) {
-      signinResult.textContent = 'Signing in...';
-      try {
-        const res = await fetch('http://194.60.230.197:5679/webhook/sign-ing', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username, password })
+      // Create account submit
+      document
+        .getElementById('account-submit')
+        .addEventListener('click', async () => {
+          const ballance = document
+            .getElementById('account-ballance')
+            .value.trim();
+          const owned_by = document.getElementById('account-owned_by').value;
+          const bank = document.getElementById('account-bank').value;
+          const priority = document
+            .getElementById('account-priority')
+            .value.trim();
+          const resultBox = document.getElementById('account-result');
+
+          if (!ballance || !owned_by || !bank || !priority) {
+            resultBox.textContent = 'Please fill all fields.';
+            return;
+          }
+
+          const body = {
+            ballance: Number(ballance),
+            owned_by: Number(owned_by),
+            bank,
+            priority: Number(priority),
+          };
+
+          try {
+            const res = await fetch(
+              'http://194.60.230.197:5679/webhook/account',
+              {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify(body),
+              },
+            );
+            const data = await res.json();
+            resultBox.textContent = JSON.stringify(data, null, 2);
+          } catch (e) {
+            resultBox.textContent = 'Error: ' + e.message;
+          }
         });
-        const data = await res.json();
-        if (!res.ok || !data.token) {
-          throw new Error(data.message || 'Invalid credentials');
-        }
-        token = data.token;
-        localStorage.setItem('token', token);
-        signinResult.textContent = '';
-        return true;
-      } catch (e) {
-        signinResult.textContent = 'Sign-in failed: ' + e.message;
-        return false;
-      }
-    }
 
-    // Initialize app after sign-in or if token exists
-    async function initApp() {
-      signinForm.style.display = 'none';
-      mainAppContent.style.display = 'block';
-      await fetchRelatedUsers();
-      fillAllStaticSelects();
-      showTab('payment');
-    }
+      // Incomes submit
+      document
+        .getElementById('income-submit')
+        .addEventListener('click', async () => {
+          const user_id = document.getElementById('income-user').value;
+          const ballance = document
+            .getElementById('income-ballance')
+            .value.trim();
+          const description = document
+            .getElementById('income-description')
+            .value.trim();
+          const category = document.getElementById('income-category').value;
+          const bank = document.getElementById('income-bank').value;
+          const resultBox = document.getElementById('income-result');
 
-    // Event listeners
-    signinBtn.addEventListener('click', async () => {
-      const username = document.getElementById('username').value.trim();
-      const password = document.getElementById('password').value;
-      if (!username || !password) {
-        signinResult.textContent = 'Please enter username and password.';
-        return;
-      }
-      const success = await signIn(username, password);
-      if (success) {
-        await initApp();
-      }
-    });
+          if (!user_id || !ballance || !description || !category || !bank) {
+            resultBox.textContent = 'Please fill all fields.';
+            return;
+          }
 
-    menuToggle.addEventListener('click', () => {
-      const isVisible = menuDropdown.style.display === 'flex';
-      menuDropdown.style.display = isVisible ? 'none' : 'flex';
-    });
-    
-    // Add event listeners for all tabs
-    menuDropdown.querySelectorAll('button[data-tab]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        showTab(btn.getAttribute('data-tab'));
-      });
-    });
+          const body = {
+            user_id: Number(user_id),
+            ballance: Number(ballance),
+            description,
+            category,
+            bank,
+          };
 
-    // Payment submit
-    document.getElementById('payment-submit').addEventListener('click', async () => {
-      const price = document.getElementById('payment-price').value.trim();
-      const bank = document.getElementById('payment-bank').value;
-      const category = document.getElementById('payment-category').value;
-      const description = document.getElementById('payment-description').value.trim();
-      const is_fun = document.getElementById('payment-is_fun').value;
-      const is_maman = document.getElementById('payment-is_maman').value;
-      const resultBox = document.getElementById('payment-result');
-
-      if (!price || !bank || !category || !description) {
-        resultBox.textContent = 'Please fill all fields.';
-        return;
-      }
-
-      const text = [price, bank, category, description, is_fun, is_maman].join(',');
-
-      try {
-        const res = await fetch('http://194.60.230.197:5679/webhook/payment', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify({ text })
+          try {
+            const res = await fetch(
+              'http://194.60.230.197:5679/webhook/income',
+              {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify(body),
+              },
+            );
+            const data = await res.json();
+            resultBox.textContent = JSON.stringify(data, null, 2);
+          } catch (e) {
+            resultBox.textContent = 'Error: ' + e.message;
+          }
         });
-        const data = await res.json();
-        resultBox.textContent = JSON.stringify(data, null, 2);
-      } catch (e) {
-        resultBox.textContent = 'Error: ' + e.message;
-      }
-    });
 
-    // Create account submit
-    document.getElementById('account-submit').addEventListener('click', async () => {
-      const ballance = document.getElementById('account-ballance').value.trim();
-      const owned_by = document.getElementById('account-owned_by').value;
-      const bank = document.getElementById('account-bank').value;
-      const priority = document.getElementById('account-priority').value.trim();
-      const resultBox = document.getElementById('account-result');
+      // Exchange submit
+      document
+        .getElementById('exchange-submit')
+        .addEventListener('click', async () => {
+          const from_account = document.getElementById(
+            'exchange-from-account',
+          ).value;
+          const to_account = document.getElementById(
+            'exchange-to-account',
+          ).value;
+          const amount = document
+            .getElementById('exchange-amount')
+            .value.trim();
+          const from_owner = document.getElementById(
+            'exchange-from-owner',
+          ).value;
+          const to_owner = document.getElementById('exchange-to-owner').value;
+          const resultBox = document.getElementById('exchange-result');
 
-      if (!ballance || !owned_by || !bank || !priority) {
-        resultBox.textContent = 'Please fill all fields.';
-        return;
-      }
+          if (
+            !from_account ||
+            !to_account ||
+            !amount ||
+            !from_owner ||
+            !to_owner
+          ) {
+            resultBox.textContent = 'Please fill all fields.';
+            return;
+          }
 
-      const body = {
-        ballance: Number(ballance),
-        owned_by: Number(owned_by),
-        bank,
-        priority: Number(priority),
-      };
+          const body = {
+            from_account,
+            to_account,
+            amount: Number(amount),
+            from_owner: Number(from_owner),
+            to_owner: Number(to_owner),
+          };
 
-      try {
-        const res = await fetch('http://194.60.230.197:5679/webhook/account', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify(body)
+          try {
+            const res = await fetch(
+              'http://194.60.230.197:5679/webhook/exchange',
+              {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify(body),
+              },
+            );
+            const data = await res.json();
+            resultBox.textContent = JSON.stringify(data, null, 2);
+          } catch (e) {
+            resultBox.textContent = 'Error: ' + e.message;
+          }
         });
-        const data = await res.json();
-        resultBox.textContent = JSON.stringify(data, null, 2);
-      } catch (e) {
-        resultBox.textContent = 'Error: ' + e.message;
-      }
-    });
 
-    // Incomes submit
-    document.getElementById('income-submit').addEventListener('click', async () => {
-      const user_id = document.getElementById('income-user').value;
-      const ballance = document.getElementById('income-ballance').value.trim();
-      const description = document.getElementById('income-description').value.trim();
-      const category = document.getElementById('income-category').value;
-      const bank = document.getElementById('income-bank').value;
-      const resultBox = document.getElementById('income-result');
-
-      if (!user_id || !ballance || !description || !category || !bank) {
-        resultBox.textContent = 'Please fill all fields.';
-        return;
-      }
-
-      const body = {
-        user_id: Number(user_id),
-        ballance: Number(ballance),
-        description,
-        category,
-        bank
-      };
-
-      try {
-        const res = await fetch('http://194.60.230.197:5679/webhook/income', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify(body)
-        });
-        const data = await res.json();
-        resultBox.textContent = JSON.stringify(data, null, 2);
-      } catch (e) {
-        resultBox.textContent = 'Error: ' + e.message;
-      }
-    });
-
-    // Exchange submit
-    document.getElementById('exchange-submit').addEventListener('click', async () => {
-      const from_account = document.getElementById('exchange-from-account').value;
-      const to_account = document.getElementById('exchange-to-account').value;
-      const amount = document.getElementById('exchange-amount').value.trim();
-      const from_owner = document.getElementById('exchange-from-owner').value;
-      const to_owner = document.getElementById('exchange-to-owner').value;
-      const resultBox = document.getElementById('exchange-result');
-
-      if (!from_account || !to_account || !amount || !from_owner || !to_owner) {
-        resultBox.textContent = 'Please fill all fields.';
-        return;
-      }
-
-      const body = {
-        from_account,
-        to_account,
-        amount: Number(amount),
-        from_owner: Number(from_owner),
-        to_owner: Number(to_owner),
-      };
-
-      try {
-        const res = await fetch('http://194.60.230.197:5679/webhook/exchange', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify(body)
-        });
-        const data = await res.json();
-        resultBox.textContent = JSON.stringify(data, null, 2);
-      } catch (e) {
-        resultBox.textContent = 'Error: ' + e.message;
-      }
-    });
-
-    // On page load: check token and initialize or show sign-in
-    (async () => {
-      if (token) {
-        try {
-          await initApp();
-        } catch {
-          // token might be invalid or expired
-          localStorage.removeItem('token');
-          token = null;
+      // On page load: check token and initialize or show sign-in
+      (async () => {
+        if (token) {
+          try {
+            await initApp();
+          } catch {
+            // token might be invalid or expired
+            localStorage.removeItem('token');
+            token = null;
+            signinForm.style.display = 'block';
+            mainAppContent.style.display = 'none';
+          }
+        } else {
           signinForm.style.display = 'block';
           mainAppContent.style.display = 'none';
         }
-      } else {
-        signinForm.style.display = 'block';
-        mainAppContent.style.display = 'none';
-      }
-    })();
+      })();
 
-    document.getElementById('clear-storage-btn').addEventListener('click', () => {
-      localStorage.clear();
-      // Using an inline message instead of alert()
-      const message = document.createElement('p');
-      message.textContent = 'LocalStorage has been cleared. Reloading...';
-      message.style.color = '#007bff';
-      message.style.fontWeight = 'bold';
-      document.body.appendChild(message);
-      setTimeout(() => {
-        location.reload();
-      }, 1500); // Reload after a brief delay to show message
-    });
-  </script>
-</body>
+      document
+        .getElementById('clear-storage-btn')
+        .addEventListener('click', () => {
+          localStorage.clear();
+          // Using an inline message instead of alert()
+          const message = document.createElement('p');
+          message.textContent = 'LocalStorage has been cleared. Reloading...';
+          message.style.color = '#007bff';
+          message.style.fontWeight = 'bold';
+          document.body.appendChild(message);
+          setTimeout(() => {
+            location.reload();
+          }, 1500); // Reload after a brief delay to show message
+        });
+    </script>
+  </body>
 </html>
