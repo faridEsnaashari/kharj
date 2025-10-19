@@ -18,5 +18,6 @@ config();
       synchronize: true,
     }),
   ],
+  exports: [SequelizeModule],
 })
 export class DatabaseModule {}
