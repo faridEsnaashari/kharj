@@ -14,7 +14,12 @@ export const command: Command = {
         .replace(/([A-Z])([A-Z][a-z])/g, '$1-$2')
         .toLowerCase();
 
-    const moduleName = argv.name as string;
+    let moduleName = argv.name as string;
+    moduleName = moduleName
+      .split('')
+      .map((i, index) => (index === 0 ? i.toUpperCase() : i))
+      .join('');
+
     if (!moduleName) {
       return { isSuccess: false, error: 'Module name is required' };
     }
