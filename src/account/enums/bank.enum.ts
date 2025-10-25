@@ -1,0 +1,10 @@
+export enum Bank {
+  NOBITEX = 'NOBITEX',
+  RESALAT = 'RESALAT',
+  MELY = 'MELY',
+  SEPAH = 'SEPAH',
+  PASARGAD = 'PASARGAD',
+  BLUE = 'BLUE',
+  MOFID = 'MOFID',
+  BITPIN = 'BITPIN',
+}
