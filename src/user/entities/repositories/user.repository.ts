@@ -83,6 +83,19 @@ export class UserRepository {
     return result;
   }
 
+  async findOneOrFail(
+    conditions: FindOptions<User> | WhereOptions<User>,
+    raw = true,
+  ): Promise<User> {
+    const result = await this.findOne(conditions, raw);
+
+    if (!result) {
+      throw new NotFoundException('user not found');
+    }
+
+    return result;
+  }
+
   async findOneByIdOrFail(id: User['id'], raw = true): Promise<User> {
     const result = await this.findOneById(id, raw);
 

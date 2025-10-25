@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { UserRepository } from './entities/repositories/user.repository';
+import { User } from './entities/user.entity';
 //import { User } from './entities/user.entity';
 //import { UpdateUserDto } from './dtos/update-user.dto';
 //import { FindAllUserDto } from './dtos/find-all-user.dto';
@@ -88,8 +89,8 @@ export class UserService {
   //    });
   //  }
 
-  async findOneUser(id: number) {
-    return this.userRepository.findOneById(id);
+  async findOneUser(id: User['id']): Promise<User | null> {
+    return this.userRepository.findOneByIdOrFail(id);
   }
   //
   //  async findAllUser(query: FindAllUserDto): Promise<Paginated<User>> {

@@ -15,6 +15,9 @@
     "forceConsistentCasingInFileNames": false,
     "noFallthroughCasesInSwitch": true,
     "strict": true,
+    "paths": {
+      "src/*": ["src/*"]
+    },
     "module": "commonjs",
     "target": "es2020",
     "moduleResolution": "node",
