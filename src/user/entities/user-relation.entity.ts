@@ -13,26 +13,29 @@ import {
 import { CreateEntity, UpdateEntity } from 'src/common/types/entity.type';
 import { User, UserModel } from 'src/user/entities/user.entity';
 
-export type Account = {
+export type UserRelation = {
   id: number;
   userId: number;
   user: User;
-  owner: User;
-  ownedBy: number;
-  ballance: number;
-  bank: string;
-  priority: number;
+  relatedTo: number;
+  relatedUser: User;
   createdAt: string;
   updatedAt: string;
 };
 
-export type CreateAccount = Omit<CreateEntity<Account>, 'user' | 'owner'>;
-export type UpdateAccount = Omit<UpdateEntity<Account>, 'user' | 'owner'>;
+export type CreateUserRelation = Omit<
+  CreateEntity<UserRelation>,
+  'user' | 'relatedUser'
+>;
+export type UpdateUserRelation = Omit<
+  UpdateEntity<UserRelation>,
+  'user' | 'relatedUser'
+>;
 
-@Table({ tableName: 'accounts', underscored: true })
-export class AccountModel
-  extends Model<Account, CreateAccount>
-  implements Account
+@Table({ tableName: 'user_relations', underscored: true })
+export class UserRelationModel
+  extends Model<UserRelation, CreateUserRelation>
+  implements UserRelation
 {
   @PrimaryKey
   @AutoIncrement
@@ -40,24 +43,12 @@ export class AccountModel
   id!: number;
 
   @AllowNull(false)
-  @Column
-  bank!: string;
-
-  @AllowNull(false)
-  @Column
+  @Column(DataType.INTEGER)
   userId!: number;
 
   @AllowNull(false)
-  @Column
-  ownedBy!: number;
-
-  @AllowNull(false)
-  @Column
-  ballance!: number;
-
-  @AllowNull(false)
-  @Column
-  priority!: number;
+  @Column(DataType.INTEGER)
+  relatedTo!: number;
 
   @CreatedAt
   @Column(DataType.DATE)
@@ -69,13 +60,13 @@ export class AccountModel
 
   @BelongsTo(() => UserModel, {
     as: 'user',
-    foreignKey: 'userId',
+    foreignKey: 'user_id',
   })
   user!: User;
 
   @BelongsTo(() => UserModel, {
-    as: 'owner',
-    foreignKey: 'ownedBy',
+    as: 'relatedUser',
+    foreignKey: 'related_to',
   })
-  owner!: User;
+  relatedUser!: User;
 }

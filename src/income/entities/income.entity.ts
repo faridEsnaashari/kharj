@@ -12,12 +12,12 @@ import {
 } from 'sequelize-typescript';
 import { CreateEntity, UpdateEntity } from 'src/common/types/entity.type';
 import { IncomeCategory } from '../enums/income-category.enum';
-import { AccountModel } from 'src/account/entities/account.entity';
+import { Account, AccountModel } from 'src/account/entities/account.entity';
 
 export type Income = {
   id: number;
   accountId: number;
-  account: AccountModel;
+  account: Account;
   amount: number;
   category: IncomeCategory;
   description?: string;
@@ -63,5 +63,5 @@ export class IncomeModel extends Model<Income, CreateIncome> implements Income {
     as: 'account',
     foreignKey: 'account_id',
   })
-  account!: AccountModel;
+  account!: Account;
 }
