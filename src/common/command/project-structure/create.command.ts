@@ -194,7 +194,7 @@ export class ${capitalize(moduleName)}Controller {
     // 6️⃣ module
     writeFile(
       path.join(baseDir, `${fileName}.module.ts`),
-      `import { Global, Module } from '@nestjs/common';
+      `import { Module } from '@nestjs/common';
 import { SequelizeModule } from '@nestjs/sequelize';
 import { ${capitalize(moduleName)}Controller } from './${fileName}.controller';
 import { ${capitalize(moduleName)}Model } from './entities/${fileName}.entity';
@@ -202,7 +202,6 @@ import { ${capitalize(moduleName)}Service } from './${fileName}.service';
 import { ${capitalize(moduleName)}Repository } from './entities/repositories/${fileName}.repository';
 //import { AuthModule } from 'src/auth/auth.module';
 
-@Global()
 @Module({
   //imports: [SequelizeModule.forFeature([${capitalize(moduleName)}Model]), AuthModule],
   imports: [SequelizeModule.forFeature([${capitalize(moduleName)}Model])],
