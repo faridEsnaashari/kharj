@@ -13,6 +13,5 @@ import { AccountModel } from 'src/account/entities/account.entity';
   imports: [SequelizeModule.forFeature([IncomeModel, AccountModel])],
   providers: [IncomeService, IncomeRepository, AccountRepository],
   controllers: [IncomeController],
-  exports: [IncomeRepository],
 })
 export class IncomeModule {}

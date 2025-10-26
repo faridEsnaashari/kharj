@@ -33,7 +33,7 @@ module.exports = {
           },
           field: 'id',
         },
-        field: 'from_user',
+        field: 'from_user_id',
       },
       toUser: {
         type: DataType.BIGINT.UNSIGNED,
@@ -44,7 +44,7 @@ module.exports = {
           },
           field: 'id',
         },
-        field: 'to_user',
+        field: 'to_user_id',
       },
 
       amount: {
