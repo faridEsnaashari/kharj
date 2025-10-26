@@ -9,6 +9,7 @@ import { AuthModule } from './auth/auth.module';
 import { AccountModule } from './account/account.module';
 import { IncomeModule } from './income/income.module';
 import { PaymentModule } from './payment/payment.module';
+import { ExchangeModule } from './exchange/exchange.module';
 
 @Module({
   //imports: [DatabaseModule, PinoModule, AuthModule, UserModule],
@@ -20,6 +21,7 @@ import { PaymentModule } from './payment/payment.module';
     AccountModule,
     IncomeModule,
     PaymentModule,
+    ExchangeModule,
   ],
   controllers: [AppController],
   providers: [AppService],

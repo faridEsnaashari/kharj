@@ -207,7 +207,6 @@ import { ${capitalize(moduleName)}Repository } from './entities/repositories/${f
   imports: [SequelizeModule.forFeature([${capitalize(moduleName)}Model])],
   providers: [${capitalize(moduleName)}Service, ${capitalize(moduleName)}Repository],
   controllers: [${capitalize(moduleName)}Controller],
-  exports: [${capitalize(moduleName)}Repository],
 })
 export class ${capitalize(moduleName)}Module {}`,
     );

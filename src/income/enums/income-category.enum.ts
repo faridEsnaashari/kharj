@@ -3,4 +3,5 @@ export enum IncomeCategory {
   MOSAEDEH = 'MOSAEDEH',
   BEDEHI = 'BEDEHI',
   LOAN = 'LOAN',
+  EXCHANGE = 'EXCHANGE',
 }
