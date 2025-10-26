@@ -54,12 +54,12 @@ export class AccountDebtModel
 
   @AllowNull(false)
   @ForeignKey(() => UserModel)
-  @Column({ field: 'from_user', type: DataType.INTEGER })
+  @Column({ field: 'from_user_id', type: DataType.INTEGER })
   fromUserId!: number;
 
   @AllowNull(false)
   @ForeignKey(() => UserModel)
-  @Column({ field: 'to_user', type: DataType.INTEGER })
+  @Column({ field: 'to_user_id', type: DataType.INTEGER })
   toUserId!: number;
 
   @AllowNull(false)

@@ -17,12 +17,17 @@ export function selectAccountsForPayment(
 
     if (acc.ballance <= 0) {
       selectedAccounts = [...selectedAccounts, { ...acc, minus: 0 }];
+      continue;
     }
 
     if (remain <= acc.ballance) {
       selectedAccounts = [
         ...selectedAccounts,
-        { ...acc, ballance: acc.ballance - remain, minus: 0 },
+        {
+          ...acc,
+          ballance: acc.ballance - remain,
+          minus: acc.ballance - remain,
+        },
       ];
 
       remain = 0;
