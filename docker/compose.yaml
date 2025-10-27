@@ -13,7 +13,6 @@ services:
       - ../front:/usr/src/app/dist/public/front
     ports:
       - '3005:3005'
-
     environment:
       - MYSQL_HOST=kharj-mysql
       - MYSQL_PORT=3306
