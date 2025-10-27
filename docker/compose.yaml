@@ -13,16 +13,8 @@ services:
       - ../front:/usr/src/app/dist/public/front
     ports:
       - '3005:3005'
-
-    environment:
-      - MYSQL_HOST=kharj-mysql
-      - MYSQL_PORT=3306
-      - MYSQL_USERNAME=root
-      - MYSQL_PASSWORD=13578642sM@K
-      - MYSQL_DATABASE=kharjdb
-      - APP_PORT=3005
-      - APP_BASE_URL=http://localhost:3005
-      - JWT_SECRET_KEY=lkfdsjglksdjflkdjglksajdlkdsajvlksjfdav
+    env_file:
+      - .env
     networks:
       - kharj-mysql-network
 
