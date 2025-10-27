@@ -23,6 +23,7 @@ jobs:
             git checkout main
             git pull origin main
 
+            cd docker/
             cat > .env <<EOF
             MYSQL_HOST=${{ secrets.MYSQL_HOST }}
             MYSQL_PORT=${{ secrets.MYSQL_PORT }}
@@ -36,7 +37,6 @@ jobs:
 
             npx sequelize-cli db:migrate
 
-            cd docker/
             docker-compose down app
             docker-compose build app
             docker-compose up app -d
