@@ -5,6 +5,27 @@ networks:
     external: true
 
 services:
+  app:
+    container_name: kharj-app
+    build: ../
+    restart: always
+    volumes:
+      - ../front:/usr/src/app/dist/public/front
+    ports:
+      - '3005:3005'
+
+    environment:
+      - MYSQL_HOST=kharj-mysql
+      - MYSQL_PORT=3306
+      - MYSQL_USERNAME=root
+      - MYSQL_PASSWORD=13578642sM@K
+      - MYSQL_DATABASE=kharjdb
+      - APP_PORT=3005
+      - APP_BASE_URL=http://localhost:3005
+      - JWT_SECRET_KEY=lkfdsjglksdjflkdjglksajdlkdsajvlksjfdav
+    networks:
+      - kharj-mysql-network
+
   mysql:
     container_name: kharj-mysql
     build: ./mysql
