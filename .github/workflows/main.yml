@@ -1,25 +1,42 @@
-name: Deploy on Merge to Main
+name: Deploy Kharj
 
 on:
   push:
-    branches: ['test']
-  pull_request:
-    branches: ['test']
+    branches: ['main']
 
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Deploy to Remote Server via SSH
-        uses: appleboy/ssh-action@v1.2.0
+      - name: Execute remote SSH commands using password
+        uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           password: ${{ secrets.SERVER_PASSWORD }}
           port: ${{ secrets.SERVER_PORT }}
           script: |
-            mkdir testKhar
+            cd refKharj/
+            git checkout main
+            git pull origin main
+
+            cat > .env <<EOF
+            MYSQL_HOST=${{ secrets.MYSQL_HOST }}
+            MYSQL_PORT=${{ secrets.MYSQL_PORT }}
+            MYSQL_USERNAME=${{ secrets.MYSQL_USERNAME }}
+            MYSQL_PASSWORD=${{ secrets.MYSQL_PASSWORD }}
+            MYSQL_DATABASE=${{ secrets.MYSQL_DATABASE }}
+            APP_PORT=${{ secrets.APP_PORT }}
+            APP_BASE_URL=${{ secrets.APP_BASE_URL }}
+            JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }}
+            EOF
+
+            npx sequelize-cli db:migrate
+
+            cd docker/
+            docker-compose down app
+            docker-compose build app
+            docker-compose up app -d
