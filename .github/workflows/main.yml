@@ -2,8 +2,9 @@ name: Deploy on Merge to Main
 
 on:
   push:
-    branches:
-      - test
+    branches: ['test']
+  pull_request:
+    branches: ['test']
 
 jobs:
   deploy:
@@ -21,4 +22,4 @@ jobs:
           password: ${{ secrets.SERVER_PASSWORD }}
           port: ${{ secrets.SERVER_PORT }}
           script: |
-           mkdir testKhar
+            mkdir testKhar
