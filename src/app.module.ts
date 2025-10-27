@@ -10,10 +10,15 @@ import { AccountModule } from './account/account.module';
 import { IncomeModule } from './income/income.module';
 import { PaymentModule } from './payment/payment.module';
 import { ExchangeModule } from './exchange/exchange.module';
+import { ServeStaticModule } from '@nestjs/serve-static';
+import { join } from 'path';
 
 @Module({
   //imports: [DatabaseModule, PinoModule, AuthModule, UserModule],
   imports: [
+    ServeStaticModule.forRoot({
+      rootPath: join(__dirname, '..', 'public'),
+    }),
     DatabaseModule,
     PinoModule,
     UserModule,

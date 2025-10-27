@@ -326,7 +326,9 @@
     </div>
 
     <script>
+      // ------------------------
       // Mappers
+      // ------------------------
       const bankMapper = {
         rs: 'RESALAT',
         bm: 'MELY',
@@ -363,50 +365,48 @@
         vm: 'LOAN',
       };
 
-      // Cached token and related users
+      // ------------------------
+      // Config
+      // ------------------------
+      const BASEURL = 'http://localhost:3005'; // replace with your actual API base URL
       let token = localStorage.getItem('token') || null;
       let relatedUsers = [];
 
+      // ------------------------
       // Elements
+      // ------------------------
       const signinForm = document.getElementById('signin-form');
       const signinBtn = document.getElementById('signin-btn');
       const signinResult = document.getElementById('signin-result');
       const mainAppContent = document.getElementById('main-app-content');
       const menuToggle = document.getElementById('menu-toggle');
       const menuDropdown = document.getElementById('menu-dropdown');
-      const tabContent = document.querySelector('.tab-content');
       const tabs = document.querySelectorAll('.tab');
 
-      // Show/Hide tabs based on data-tab attribute
+      // ------------------------
+      // Helpers
+      // ------------------------
       function showTab(tabId) {
-        tabs.forEach((tab) => {
-          tab.classList.toggle('active', tab.id === tabId);
-        });
-        // Toggle active state for menu buttons
+        tabs.forEach((tab) => tab.classList.toggle('active', tab.id === tabId));
         menuDropdown.querySelectorAll('button[data-tab]').forEach((btn) => {
           btn.classList.toggle(
             'active',
             btn.getAttribute('data-tab') === tabId,
           );
         });
-        // On mobile, close the menu after selecting a tab
-        if (window.innerWidth < 600) {
-          menuDropdown.style.display = 'none';
-        }
+        if (window.innerWidth < 600) menuDropdown.style.display = 'none';
       }
 
-      // Fill select options helper
       function fillSelect(selectElem, optionsObj) {
         selectElem.innerHTML = '';
         for (const [key, val] of Object.entries(optionsObj)) {
           const option = document.createElement('option');
-          option.value = key;
+          option.value = val; // API expects the full string
           option.textContent = val;
           selectElem.appendChild(option);
         }
       }
 
-      // Fill related users select elements
       function fillRelatedUsersSelects() {
         [
           'account-owned_by',
@@ -425,20 +425,15 @@
         });
       }
 
-      // Fill all bank/category selects
       function fillAllStaticSelects() {
-        // Payment tab
         fillSelect(document.getElementById('payment-bank'), bankMapper);
         fillSelect(document.getElementById('payment-category'), categoryMapper);
-        // Account tab
         fillSelect(document.getElementById('account-bank'), bankMapper);
-        // Income tab
         fillSelect(document.getElementById('income-bank'), bankMapper);
         fillSelect(
           document.getElementById('income-category'),
           incomeCategoryMapper,
         );
-        // Exchange tab
         fillSelect(
           document.getElementById('exchange-from-account'),
           bankMapper,
@@ -446,45 +441,35 @@
         fillSelect(document.getElementById('exchange-to-account'), bankMapper);
       }
 
-      // Fetch related users
+      // ------------------------
+      // API Calls
+      // ------------------------
       async function fetchRelatedUsers() {
         try {
-          const res = await fetch(
-            'http://194.60.230.197:5679/webhook/related-users',
-            {
-              method: 'GET',
-              headers: {
-                Authorization: `Bearer ${token}`,
-              },
-            },
-          );
-          if (!res.ok)
-            throw new Error(`Related users fetch failed: ${res.statusText}`);
-          relatedUsers = await res.json();
+          const res = await fetch(`${BASEURL}/user/related-user`, {
+            method: 'GET',
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (!res.ok) throw new Error(res.statusText);
+          relatedUsers = (await res.json()).data;
           fillRelatedUsersSelects();
         } catch (e) {
-          // Updated to use a result box instead of an alert
-          console.error('Failed to fetch related users:', e.message);
+          console.error('Related users fetch failed:', e.message);
         }
       }
 
-      // Sign-in function
       async function signIn(username, password) {
         signinResult.textContent = 'Signing in...';
         try {
-          const res = await fetch(
-            'http://194.60.230.197:5679/webhook/sign-ing',
-            {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ username, password }),
-            },
-          );
+          const res = await fetch(`${BASEURL}/auth/signin`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password }),
+          });
           const data = await res.json();
-          if (!res.ok || !data.token) {
+          if (!res.ok || !data.data?.token)
             throw new Error(data.message || 'Invalid credentials');
-          }
-          token = data.token;
+          token = data.data.token;
           localStorage.setItem('token', token);
           signinResult.textContent = '';
           return true;
@@ -494,7 +479,6 @@
         }
       }
 
-      // Initialize app after sign-in or if token exists
       async function initApp() {
         signinForm.style.display = 'none';
         mainAppContent.style.display = 'block';
@@ -503,7 +487,9 @@
         showTab('payment');
       }
 
-      // Event listeners
+      // ------------------------
+      // Event Listeners
+      // ------------------------
       signinBtn.addEventListener('click', async () => {
         const username = document.getElementById('username').value.trim();
         const password = document.getElementById('password').value;
@@ -511,25 +497,23 @@
           signinResult.textContent = 'Please enter username and password.';
           return;
         }
-        const success = await signIn(username, password);
-        if (success) {
-          await initApp();
-        }
+        if (await signIn(username, password)) await initApp();
       });
 
       menuToggle.addEventListener('click', () => {
-        const isVisible = menuDropdown.style.display === 'flex';
-        menuDropdown.style.display = isVisible ? 'none' : 'flex';
+        menuDropdown.style.display =
+          menuDropdown.style.display === 'flex' ? 'none' : 'flex';
       });
 
-      // Add event listeners for all tabs
       menuDropdown.querySelectorAll('button[data-tab]').forEach((btn) => {
-        btn.addEventListener('click', () => {
-          showTab(btn.getAttribute('data-tab'));
-        });
+        btn.addEventListener('click', () =>
+          showTab(btn.getAttribute('data-tab')),
+        );
       });
 
-      // Payment submit
+      // ------------------------
+      // Payment Submit
+      // ------------------------
       document
         .getElementById('payment-submit')
         .addEventListener('click', async () => {
@@ -539,8 +523,9 @@
           const description = document
             .getElementById('payment-description')
             .value.trim();
-          const is_fun = document.getElementById('payment-is_fun').value;
-          const is_maman = document.getElementById('payment-is_maman').value;
+          const isFun = document.getElementById('payment-is_fun').value === '1';
+          const isMaman =
+            document.getElementById('payment-is_maman').value === '1';
           const resultBox = document.getElementById('payment-result');
 
           if (!price || !bank || !category || !description) {
@@ -548,27 +533,24 @@
             return;
           }
 
-          const text = [
-            price,
+          const body = {
+            price: Number(price),
             bank,
             category,
             description,
-            is_fun,
-            is_maman,
-          ].join(',');
+            isFun,
+            isMaman,
+          };
 
           try {
-            const res = await fetch(
-              'http://194.60.230.197:5679/webhook/payment',
-              {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  Authorization: `Bearer ${token}`,
-                },
-                body: JSON.stringify({ text }),
+            const res = await fetch(`${BASEURL}/payment`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${token}`,
               },
-            );
+              body: JSON.stringify(body),
+            });
             const data = await res.json();
             resultBox.textContent = JSON.stringify(data, null, 2);
           } catch (e) {
@@ -576,44 +558,44 @@
           }
         });
 
-      // Create account submit
+      // ------------------------
+      // Account Submit
+      // ------------------------
       document
         .getElementById('account-submit')
         .addEventListener('click', async () => {
           const ballance = document
             .getElementById('account-ballance')
             .value.trim();
-          const owned_by = document.getElementById('account-owned_by').value;
+          const ownedBy = document.getElementById('account-owned_by').value;
           const bank = document.getElementById('account-bank').value;
           const priority = document
             .getElementById('account-priority')
             .value.trim();
           const resultBox = document.getElementById('account-result');
 
-          if (!ballance || !owned_by || !bank || !priority) {
+          if (!ballance || !ownedBy || !bank || !priority) {
             resultBox.textContent = 'Please fill all fields.';
             return;
           }
 
           const body = {
+            userId: Number(ownedBy),
+            ownedBy: Number(ownedBy),
             ballance: Number(ballance),
-            owned_by: Number(owned_by),
             bank,
             priority: Number(priority),
           };
 
           try {
-            const res = await fetch(
-              'http://194.60.230.197:5679/webhook/account',
-              {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  Authorization: `Bearer ${token}`,
-                },
-                body: JSON.stringify(body),
+            const res = await fetch(`${BASEURL}/account`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${token}`,
               },
-            );
+              body: JSON.stringify(body),
+            });
             const data = await res.json();
             resultBox.textContent = JSON.stringify(data, null, 2);
           } catch (e) {
@@ -621,12 +603,14 @@
           }
         });
 
-      // Incomes submit
+      // ------------------------
+      // Income Submit
+      // ------------------------
       document
         .getElementById('income-submit')
         .addEventListener('click', async () => {
-          const user_id = document.getElementById('income-user').value;
-          const ballance = document
+          const userId = document.getElementById('income-user').value;
+          const amount = document
             .getElementById('income-ballance')
             .value.trim();
           const description = document
@@ -636,31 +620,29 @@
           const bank = document.getElementById('income-bank').value;
           const resultBox = document.getElementById('income-result');
 
-          if (!user_id || !ballance || !description || !category || !bank) {
+          if (!userId || !amount || !description || !category || !bank) {
             resultBox.textContent = 'Please fill all fields.';
             return;
           }
 
           const body = {
-            user_id: Number(user_id),
-            ballance: Number(ballance),
-            description,
-            category,
+            userId: Number(userId),
+            ownedBy: Number(userId),
+            amount: Number(amount),
             bank,
+            category,
+            priority: 1,
           };
 
           try {
-            const res = await fetch(
-              'http://194.60.230.197:5679/webhook/income',
-              {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  Authorization: `Bearer ${token}`,
-                },
-                body: JSON.stringify(body),
+            const res = await fetch(`${BASEURL}/income`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${token}`,
               },
-            );
+              body: JSON.stringify(body),
+            });
             const data = await res.json();
             resultBox.textContent = JSON.stringify(data, null, 2);
           } catch (e) {
@@ -668,56 +650,48 @@
           }
         });
 
-      // Exchange submit
+      // ------------------------
+      // Exchange Submit
+      // ------------------------
       document
         .getElementById('exchange-submit')
         .addEventListener('click', async () => {
-          const from_account = document.getElementById(
+          const fromAccount = document.getElementById(
             'exchange-from-account',
           ).value;
-          const to_account = document.getElementById(
+          const toAccount = document.getElementById(
             'exchange-to-account',
           ).value;
           const amount = document
             .getElementById('exchange-amount')
             .value.trim();
-          const from_owner = document.getElementById(
+          const fromOwner = document.getElementById(
             'exchange-from-owner',
           ).value;
-          const to_owner = document.getElementById('exchange-to-owner').value;
+          const toOwner = document.getElementById('exchange-to-owner').value;
           const resultBox = document.getElementById('exchange-result');
 
-          if (
-            !from_account ||
-            !to_account ||
-            !amount ||
-            !from_owner ||
-            !to_owner
-          ) {
+          if (!fromAccount || !toAccount || !amount || !fromOwner || !toOwner) {
             resultBox.textContent = 'Please fill all fields.';
             return;
           }
 
           const body = {
-            from_account,
-            to_account,
+            fromAccount: fromAccount,
+            toAccount: toAccount,
             amount: Number(amount),
-            from_owner: Number(from_owner),
-            to_owner: Number(to_owner),
+            fromOwner: Number(fromOwner),
+            toOwner: Number(toOwner),
           };
-
           try {
-            const res = await fetch(
-              'http://194.60.230.197:5679/webhook/exchange',
-              {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  Authorization: `Bearer ${token}`,
-                },
-                body: JSON.stringify(body),
+            const res = await fetch(`${BASEURL}/exchange`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${token}`,
               },
-            );
+              body: JSON.stringify(body),
+            });
             const data = await res.json();
             resultBox.textContent = JSON.stringify(data, null, 2);
           } catch (e) {
@@ -725,13 +699,14 @@
           }
         });
 
-      // On page load: check token and initialize or show sign-in
+      // ------------------------
+      // On page load
+      // ------------------------
       (async () => {
         if (token) {
           try {
             await initApp();
           } catch {
-            // token might be invalid or expired
             localStorage.removeItem('token');
             token = null;
             signinForm.style.display = 'block';
@@ -743,19 +718,17 @@
         }
       })();
 
+      // Clear storage
       document
         .getElementById('clear-storage-btn')
         .addEventListener('click', () => {
           localStorage.clear();
-          // Using an inline message instead of alert()
           const message = document.createElement('p');
-          message.textContent = 'LocalStorage has been cleared. Reloading...';
+          message.textContent = 'LocalStorage cleared. Reloading...';
           message.style.color = '#007bff';
           message.style.fontWeight = 'bold';
           document.body.appendChild(message);
-          setTimeout(() => {
-            location.reload();
-          }, 1500); // Reload after a brief delay to show message
+          setTimeout(() => location.reload(), 1500);
         });
     </script>
   </body>
