@@ -17,6 +17,8 @@ async function bootstrap() {
   });
   app.useLogger(app.get(Logger));
 
+  app.enableCors();
+
   //  app.useStaticAssets(resolve('./', 'public'));
 
   app.useGlobalFilters(
