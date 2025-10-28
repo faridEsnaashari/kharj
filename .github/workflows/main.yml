@@ -35,8 +35,8 @@ jobs:
             JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }}
             EOF
 
-            docker exec -it kharj-app npx --prefix /usr/src/app sequelize-cli db:migrate
-
             docker-compose down app
             docker-compose build app
             docker-compose up app -d
+
+            docker exec -it kharj-app npx --prefix /usr/src/app sequelize-cli db:migrate
