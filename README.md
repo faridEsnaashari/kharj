@@ -8,3 +8,5 @@
 
 8. Change `npx sequelize-cli db:seed:all` file and add default admins
 9. Run `npx sequelize-cli db:seed:all`
+
+10. Run `docker exec -it kharj-app npx --prefix /usr/src/app sequelize-cli db:migrate` for docker migration
