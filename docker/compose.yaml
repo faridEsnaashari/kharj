@@ -37,25 +37,25 @@ services:
     command:
       - --default-authentication-plugin=mysql_native_password
 
-  #  metabase:
-  #    container_name: kharj-metabase
-  #    image: metabase/metabase:v0.54.18.x
-  #    restart: always
-  #    ports:
-  #      - "3003:3000"
-  #    networks:
-  #      - kharj-mysql-network
-  #    volumes:
-  #      - ./metabase/container-data/dev/urandom:/dev/random:ro
-  #    depends_on:
-  #      - mysql
-  #    environment:
-  #      - MB_DB_TYPE=mysql
-  #      - MB_DB_DBNAME=kharjdb
-  #      - MB_DB_PORT=3306
-  #      - MB_DB_USER=metabase
-  #      - MB_DB_PASS=13578642@@Fme
-  #      - MB_DB_HOST=kharj-mysql
+    metabase:
+      container_name: kharj-metabase
+      image: metabase/metabase:v0.54.18.x
+      restart: always
+      ports:
+        - '3004:3000'
+      networks:
+        - kharj-mysql-network
+      volumes:
+        - ./metabase/container-data/dev/urandom:/dev/random:ro
+      depends_on:
+        - mysql
+      environment:
+        - MB_DB_TYPE=mysql
+        - MB_DB_DBNAME=kharjdb
+        - MB_DB_PORT=3306
+        - MB_DB_USER=metabase
+        - MB_DB_PASS=13578642@@Fme
+        - MB_DB_HOST=kharj-mysql
 
   phpmyadmin:
     container_name: kharj-phpmyadmin
