@@ -41,4 +41,4 @@ jobs:
 
             sleep 10
 
-            docker exec -it kharj-app npx --prefix /usr/src/app sequelize-cli db:migrate
+            docker exec -i kharj-app npx --prefix /usr/src/app sequelize-cli db:migrate
