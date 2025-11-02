@@ -7,4 +7,5 @@ export enum Bank {
   BLUE = 'BLUE',
   MOFID = 'MOFID',
   BITPIN = 'BITPIN',
+  DIGIPAY = 'DIGIPAY',
 }
