@@ -26,7 +26,7 @@ export function selectAccountsForPayment(
         {
           ...acc,
           ballance: acc.ballance - remain,
-          minus: acc.ballance - remain,
+          minus: remain,
         },
       ];
 
