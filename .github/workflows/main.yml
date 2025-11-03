@@ -36,6 +36,7 @@ jobs:
             EOF
 
             docker-compose down app
+            docker-compose build app
             docker-compose up app -d
 
             docker exec -i kharj-app npx --prefix /usr/src/app sequelize-cli db:migrate
