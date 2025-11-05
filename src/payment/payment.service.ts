@@ -7,7 +7,7 @@ import { PaymentRepository } from './entities/repositories/payment.repository';
 import { User } from 'src/user/entities/user.entity';
 import { AccountRepository } from 'src/account/entities/repositories/account.repository';
 import { Payment } from './entities/payment.entity';
-import { selectAccountsForPayment } from './logics/payment.logic';
+import { selectAccountsForPayment, sortAccounts } from './logics/payment.logic';
 import { CreatePaymentDto } from './dtos/craete-payment.dto';
 import { AccountDebtRepository } from 'src/account-debt/entities/repositories/account-debt.repository';
 
@@ -29,8 +29,15 @@ export class PaymentService {
       throw new NotFoundException('No accounts found for this user');
     }
 
+    const targetUserId = dto.ownerId || user.id;
+    if (!accounts.find((acc) => acc.ownedBy === targetUserId)) {
+      throw new NotFoundException('target user id not found');
+    }
+
+    const sortedAccounts = sortAccounts(accounts, targetUserId);
+
     const { selectedAccounts, remain } = selectAccountsForPayment(
-      accounts,
+      sortedAccounts,
       dto.price,
     );
 
@@ -58,12 +65,12 @@ export class PaymentService {
           isMaman: dto.isMaman,
         });
 
-        if (acc.ownedBy !== user.id) {
+        if (acc.ownedBy !== targetUserId) {
           await this.accountDebptRepository.create({
             amount: acc.minus,
             paymentId: payment.id,
             fromUserId: acc.ownedBy,
-            toUserId: user.id,
+            toUserId: targetUserId,
           });
         }
 

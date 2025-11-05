@@ -30,6 +30,8 @@ jobs:
             MYSQL_USERNAME=${{ secrets.MYSQL_USERNAME }}
             MYSQL_PASSWORD=${{ secrets.MYSQL_PASSWORD }}
             MYSQL_DATABASE=${{ secrets.MYSQL_DATABASE }}
+            METABASE_DB_USERNAME=${{ secrets.METABASE_DB_USERNAME }}
+            METABASE_DB_PASSWORD=${{ secrets.METABASE_DB_PASSWORD }}
             APP_PORT=${{ secrets.APP_PORT }}
             APP_BASE_URL=${{ secrets.APP_BASE_URL }}
             JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }}

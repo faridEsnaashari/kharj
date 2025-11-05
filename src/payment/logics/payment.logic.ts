@@ -1,6 +1,7 @@
 import { Account } from 'src/account/entities/account.entity';
 import { CreatePaymentDto } from '../dtos/craete-payment.dto';
 import { SelectedAccount } from './payment.logic.type';
+import { User } from 'src/user/entities/user.entity';
 
 export function selectAccountsForPayment(
   accounts: Account[],
@@ -43,4 +44,14 @@ export function selectAccountsForPayment(
   }
 
   return { selectedAccounts, remain };
+}
+
+export function sortAccounts(
+  accounts: Account[],
+  targetUserId: User['id'],
+): Account[] {
+  const otherAccs = accounts.filter((acc) => acc.ownedBy !== targetUserId);
+  const targetAcc = accounts.find((acc) => acc.ownedBy === targetUserId)!;
+
+  return [targetAcc, ...otherAccs];
 }
