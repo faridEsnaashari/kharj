@@ -99,65 +99,24 @@ export class ${capitalize(moduleName)}Model extends Model<${capitalize(moduleNam
         'repositories',
         `${fileName}.repository.ts`,
       ),
-      `import { Injectable, NotFoundException } from '@nestjs/common';
-import { Create${capitalize(moduleName)}, ${capitalize(moduleName)}, ${capitalize(moduleName)}Model, Update${capitalize(moduleName)} } from '../${fileName}.entity';
+      `import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
-import { FindOptions, WhereOptions } from 'sequelize';
-import { Paginated } from 'src/common/types/pagination.type';
+import { ${capitalize(moduleName)}, ${capitalize(moduleName)}Model, Create${capitalize(moduleName)}, Update${capitalize(moduleName)} } from '../${fileName}.entity';
+import { CommonRepository } from 'src/common/ports/database/common-repository/common-repository';
 
 @Injectable()
-export class ${capitalize(moduleName)}Repository {
-  constructor(
-    @InjectModel(${capitalize(moduleName)}Model)
-    private ${variableName}Model: typeof ${capitalize(moduleName)}Model,
-  ) {}
-
-  async create(${variableName}: Create${capitalize(moduleName)}, raw = true): Promise<${capitalize(moduleName)}> {
-    const result = await this.${variableName}Model.create(${variableName});
-    return raw ? JSON.parse(JSON.stringify(result)) : result;
+export class ${capitalize(moduleName)}Repository extends CommonRepository<
+  ${capitalize(moduleName)},
+  Create${capitalize(moduleName)},
+  Update${capitalize(moduleName)},
+  ${capitalize(moduleName)}Model
+> {
+  constructor(@InjectModel(${capitalize(moduleName)}Model) model: typeof ${capitalize(moduleName)}Model) {
+    super(model);
   }
-
-  async pagination(conditions: FindOptions<${capitalize(moduleName)}> | WhereOptions<${capitalize(moduleName)}>, raw = true): Promise<Paginated<${capitalize(moduleName)}>> {
-    const result = await this.${variableName}Model.findAndCountAll({
-      where: !('where' in conditions) ? (conditions as Update${capitalize(moduleName)}) : undefined,
-      ...conditions,
-    });
-    return raw ? JSON.parse(JSON.stringify(result)) : result;
-  }
-
-  async findAll(conditions: FindOptions<${capitalize(moduleName)}> | WhereOptions<${capitalize(moduleName)}>, raw = true): Promise<${capitalize(moduleName)}[]> {
-    const result = await this.${variableName}Model.findAll({
-      where: !('where' in conditions) ? (conditions as Update${capitalize(moduleName)}) : undefined,
-      ...conditions,
-    });
-    return raw ? JSON.parse(JSON.stringify(result)) : result;
-  }
-
-  async findOne(conditions: FindOptions<${capitalize(moduleName)}> | WhereOptions<${capitalize(moduleName)}>, raw = true): Promise<${capitalize(moduleName)} | null> {
-    const result = await this.${variableName}Model.findOne({
-      where: !('where' in conditions) ? (conditions as Update${capitalize(moduleName)}) : undefined,
-      ...conditions,
-    });
-    return raw ? JSON.parse(JSON.stringify(result)) : result;
-  }
-
-  async updateOneById(data: Update${capitalize(moduleName)}, id: ${capitalize(moduleName)}['id']): Promise<void> {
-    await this.${variableName}Model.update(data, { where: { id } });
-  }
-
-  async findOneById(id: ${capitalize(moduleName)}['id'], raw = true): Promise<${capitalize(moduleName)} | null> {
-    const result = await this.${variableName}Model.findByPk(id);
-    return raw ? JSON.parse(JSON.stringify(result)) : result;
-  }
-
-  async findOneByIdOrFail(id: ${capitalize(moduleName)}['id'], raw = true): Promise<${capitalize(moduleName)}> {
-    const result = await this.findOneById(id, raw);
-    if (!result) throw new NotFoundException('${moduleName} not found');
-    return result;
-  }
-}`,
+}
+`,
     );
-
     // 4️⃣ service
     writeFile(
       path.join(baseDir, `${fileName}.service.ts`),
