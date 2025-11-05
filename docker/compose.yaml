@@ -31,8 +31,10 @@ services:
       - '3307:3306'
     networks:
       - kharj-mysql-network
+    env_file:
+      - .env
     environment:
-      - MYSQL_ROOT_PASSWORD=13578642sM@K
+      - MYSQL_ROOT_PASSWORD=${MYSQL_PASSWORD}
       - TZ=Asia/Tehran
     command:
       - --default-authentication-plugin=mysql_native_password
@@ -49,13 +51,15 @@ services:
       - ./metabase/container-data/dev/urandom:/dev/random:ro
     depends_on:
       - mysql
+    env_file:
+      - .env
     environment:
       - MB_DB_TYPE=mysql
-      - MB_DB_DBNAME=kharjdb
-      - MB_DB_PORT=3306
-      - MB_DB_USER=metabase
-      - MB_DB_PASS=13578642@@Fme
-      - MB_DB_HOST=kharj-mysql
+      - MB_DB_DBNAME=${MYSQL_DATABASE}
+      - MB_DB_PORT=${MYSQL_PORT}
+      - MB_DB_USER=${METABASE_DB_USERNAME}
+      - MB_DB_PASS=${METABASE_DB_PASSWORD}
+      - MB_DB_HOST=${MYSQL_HOST}
 
   phpmyadmin:
     container_name: kharj-phpmyadmin
@@ -67,5 +71,7 @@ services:
       - kharj-mysql-network
     depends_on:
       - mysql
+    env_file:
+      - .env
     environment:
-      - PMA_HOST=kharj-mysql
+      - PMA_HOST=${MYSQL_HOST}

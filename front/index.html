@@ -205,6 +205,10 @@
           <!-- Payment Tab -->
           <div class="tab" id="payment">
             <h3>Payment</h3>
+            <label>
+              Owner:
+              <select id="payment-owner"></select>
+            </label>
             <label
               >Price:
               <input type="number" id="payment-price" min="0" />
@@ -414,6 +418,7 @@
           'income-user',
           'exchange-from-owner',
           'exchange-to-owner',
+          'payment-owner',
         ].forEach((id) => {
           const sel = document.getElementById(id);
           sel.innerHTML = '';
@@ -515,50 +520,51 @@
       // ------------------------
       // Payment Submit
       // ------------------------
-      document
-        .getElementById('payment-submit')
-        .addEventListener('click', async () => {
-          const price = document.getElementById('payment-price').value.trim();
-          const bank = document.getElementById('payment-bank').value;
-          const category = document.getElementById('payment-category').value;
-          const description = document
-            .getElementById('payment-description')
-            .value.trim();
-          const isFun = document.getElementById('payment-is_fun').value === '1';
-          const isMaman =
-            document.getElementById('payment-is_maman').value === '1';
-          const resultBox = document.getElementById('payment-result');
 
-          if (!price || !bank || !category || !description) {
-            resultBox.textContent = 'Please fill all fields.';
-            return;
-          }
+document
+  .getElementById('payment-submit')
+  .addEventListener('click', async () => {
+    const price = document.getElementById('payment-price').value.trim();
+    const bank = document.getElementById('payment-bank').value;
+    const category = document.getElementById('payment-category').value;
+    const description = document
+      .getElementById('payment-description')
+      .value.trim();
+    const isFun = document.getElementById('payment-is_fun').value === '1';
+    const isMaman = document.getElementById('payment-is_maman').value === '1';
+    const ownerId = document.getElementById('payment-owner').value; // ✅ new
+    const resultBox = document.getElementById('payment-result');
 
-          const body = {
-            price: Number(price),
-            bank,
-            category,
-            description,
-            isFun,
-            isMaman,
-          };
+    if (!price || !bank || !category || !description || !ownerId) {
+      resultBox.textContent = 'Please fill all fields.';
+      return;
+    }
 
-          try {
-            const res = await fetch(`${BASEURL}/payment`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${token}`,
-              },
-              body: JSON.stringify(body),
-            });
-            const data = await res.json();
-            resultBox.textContent = JSON.stringify(data, null, 2);
-          } catch (e) {
-            resultBox.textContent = 'Error: ' + e.message;
-          }
-        });
+    const body = {
+      price: Number(price),
+      bank,
+      category,
+      description,
+      isFun,
+      isMaman,
+      ownerId: Number(ownerId), // ✅ added
+    };
 
+    try {
+      const res = await fetch(`${BASEURL}/payment`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      resultBox.textContent = JSON.stringify(data, null, 2);
+    } catch (e) {
+      resultBox.textContent = 'Error: ' + e.message;
+    }
+  });
       // ------------------------
       // Account Submit
       // ------------------------

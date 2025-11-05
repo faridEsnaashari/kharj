@@ -9,6 +9,7 @@ export const createPaymentDtoSchema = z.object({
   description: z.string().optional(),
   isFun: z.boolean(),
   isMaman: z.boolean(),
+  ownerId: z.number(),
 });
 
 export type CreatePaymentDto = z.infer<typeof createPaymentDtoSchema>;
