@@ -24,6 +24,7 @@ jobs:
             git pull origin main
 
             cd docker/
+            rm -rf .env
             cat > .env <<EOF
             MYSQL_HOST=${{ secrets.MYSQL_HOST }}
             MYSQL_PORT=${{ secrets.MYSQL_PORT }}
