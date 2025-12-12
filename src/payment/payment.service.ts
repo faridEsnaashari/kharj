@@ -10,6 +10,8 @@ import { Payment } from './entities/payment.entity';
 import { selectAccountsForPayment, sortAccounts } from './logics/payment.logic';
 import { CreatePaymentDto } from './dtos/craete-payment.dto';
 import { AccountDebtRepository } from 'src/account-debt/entities/repositories/account-debt.repository';
+import { GetAllPaymentsDto } from './dtos/get-all-payment.dto';
+import { Paginated } from 'src/common/types/pagination.type';
 
 @Injectable()
 export class PaymentService {
@@ -18,6 +20,29 @@ export class PaymentService {
     private accountRepository: AccountRepository,
     private accountDebptRepository: AccountDebtRepository,
   ) {}
+
+  async getAllPayments(
+    query: GetAllPaymentsDto,
+    user: User,
+  ): Promise<Paginated<Payment>> {
+    const accountIds = await this.accountRepository.findAll({
+      where: { userId: user.id },
+      attributes: ['id'],
+    });
+
+    if (accountIds.length < 0) {
+      throw new NotFoundException('No accounts found for this user');
+    }
+
+    const payments = await this.paymentRepository.pagination(
+      {
+        where: { accountId: accountIds.map((a) => a.id) },
+      },
+      { page: query.page, size: query.size },
+    );
+
+    return payments;
+  }
 
   async createPayment(dto: CreatePaymentDto, user: User): Promise<Payment[]> {
     const accounts = await this.accountRepository.findAll({
