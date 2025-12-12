@@ -3,7 +3,7 @@ import { InjectModel } from '@nestjs/sequelize';
 import { FindOptions, WhereOptions } from 'sequelize';
 import { Model, ModelCtor } from 'sequelize-typescript';
 import { MakeNullishOptional } from 'sequelize/types/utils';
-import { Paginated } from 'src/common/types/pagination.type';
+import { Paginated, PaginationData } from 'src/common/types/pagination.type';
 
 @Injectable()
 export class CommonRepository<
@@ -17,6 +17,9 @@ export class CommonRepository<
     private readonly model: ModelCtor<TModel>,
   ) {}
 
+  async create(entity: TCreate, raw?: true): Promise<T>;
+  async create(entity: TCreate, raw?: false): Promise<TModel>;
+  async create(entity: TCreate, raw?: boolean): Promise<T | TModel>;
   async create(entity: TCreate, raw = true): Promise<T | TModel> {
     const result = await this.model.create(
       entity as unknown as MakeNullishOptional<TCreate>,
@@ -26,17 +29,46 @@ export class CommonRepository<
 
   async pagination(
     conditions: FindOptions<T> | WhereOptions<T>,
+    ginationData: PaginationData,
+    raw?: true,
+  ): Promise<Paginated<T>>;
+  async pagination(
+    conditions: FindOptions<T> | WhereOptions<T>,
+    paginationData: PaginationData,
+    raw?: false,
+  ): Promise<Paginated<TModel>>;
+  async pagination(
+    conditions: FindOptions<T> | WhereOptions<T>,
+    paginationData: PaginationData,
     raw = true,
   ): Promise<Paginated<T | TModel>> {
+    const limit = paginationData.size || 10;
+    const offset = ((paginationData.page || 1) - 1) * limit;
+
     const result = await this.model.findAndCountAll({
       where: !('where' in conditions)
         ? (conditions as WhereOptions<T>)
         : undefined,
+      limit,
+      offset,
+      order: [['id', 'ASC']],
       ...conditions,
     });
     return raw ? JSON.parse(JSON.stringify(result)) : result;
   }
 
+  async findAll(
+    conditions: FindOptions<T> | WhereOptions<T>,
+    raw?: true,
+  ): Promise<T[]>;
+  async findAll(
+    conditions: FindOptions<T> | WhereOptions<T>,
+    raw?: false,
+  ): Promise<TModel[]>;
+  async findAll(
+    conditions: FindOptions<T> | WhereOptions<T>,
+    raw?: boolean,
+  ): Promise<T[] | TModel[]>;
   async findAll(
     conditions: FindOptions<T> | WhereOptions<T>,
     raw = true,
@@ -50,6 +82,18 @@ export class CommonRepository<
     return raw ? JSON.parse(JSON.stringify(result)) : result;
   }
 
+  async findOne(
+    conditions: FindOptions<T> | WhereOptions<T>,
+    raw?: true,
+  ): Promise<null | T>;
+  async findOne(
+    conditions: FindOptions<T> | WhereOptions<T>,
+    raw?: false,
+  ): Promise<null | TModel>;
+  async findOne(
+    conditions: FindOptions<T> | WhereOptions<T>,
+    raw?: boolean,
+  ): Promise<T | null | TModel>;
   async findOne(
     conditions: FindOptions<T> | WhereOptions<T>,
     raw = true,
@@ -69,17 +113,35 @@ export class CommonRepository<
     });
   }
 
+  async findOneById(id: number, raw?: true): Promise<null | T>;
+  async findOneById(id: number, raw?: false): Promise<null | TModel>;
+  async findOneById(id: number, raw?: boolean): Promise<T | null | TModel>;
   async findOneById(id: number, raw = true): Promise<T | null | TModel> {
     const result = await this.model.findByPk(id);
     return raw ? JSON.parse(JSON.stringify(result)) : result;
   }
 
+  async findOneByIdOrFail(id: number, raw?: true): Promise<T>;
+  async findOneByIdOrFail(id: number, raw?: false): Promise<TModel>;
+  async findOneByIdOrFail(id: number, raw?: boolean): Promise<T | TModel>;
   async findOneByIdOrFail(id: number, raw = true): Promise<T | TModel> {
     const result = await this.findOneById(id, raw);
     if (!result) throw new NotFoundException(`${this.model.name} not found`);
-    return result;
+    return raw ? JSON.parse(JSON.stringify(result)) : result;
   }
 
+  async findOneOrFail(
+    conditions: FindOptions<T> | WhereOptions<T>,
+    raw?: true,
+  ): Promise<T>;
+  async findOneOrFail(
+    conditions: FindOptions<T> | WhereOptions<T>,
+    raw?: false,
+  ): Promise<TModel>;
+  async findOneOrFail(
+    conditions: FindOptions<T> | WhereOptions<T>,
+    raw?: boolean,
+  ): Promise<T | TModel>;
   async findOneOrFail(
     conditions: FindOptions<T> | WhereOptions<T>,
     raw = true,
