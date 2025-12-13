@@ -11,6 +11,7 @@ import { IncomeRepository } from 'src/income/entities/repositories/income.reposi
 import { AccountRepository } from 'src/account/entities/repositories/account.repository';
 import { PaymentCategory } from 'src/payment/enums/payment-category.enum';
 import { IncomeCategory } from 'src/income/enums/income-category.enum';
+import { date } from 'src/common/tools/date/date.tool';
 
 @Injectable()
 export class ExchangeService {
@@ -59,6 +60,7 @@ export class ExchangeService {
       category: PaymentCategory.EXCHANGE,
       isMaman: false,
       isFun: false,
+      paidAt: date().format('YYYY-MM-DD HH:mm:ss'),
     });
 
     const income = await this.incomeRepository.create({

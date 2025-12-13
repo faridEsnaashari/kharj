@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { PaymentCategory } from '../enums/payment-category.enum';
 import { Bank } from 'src/account/enums/bank.enum';
-import { dateDtoSchema } from 'src/common/zod-schemas/date.schema';
+import { dateTimeDtoSchema } from 'src/common/zod-schemas/date.schema';
 
 export const createPaymentDtoSchema = z.object({
   price: z.number(),
@@ -11,7 +11,7 @@ export const createPaymentDtoSchema = z.object({
   isFun: z.boolean(),
   isMaman: z.boolean(),
   ownerId: z.number(),
-  paidAt: dateDtoSchema,
+  paidAt: dateTimeDtoSchema,
 });
 
 export type CreatePaymentDto = z.infer<typeof createPaymentDtoSchema>;
