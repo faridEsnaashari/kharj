@@ -88,6 +88,7 @@ export class PaymentService {
           description: dto.description,
           isFun: dto.isFun,
           isMaman: dto.isMaman,
+          paidAt: dto.paidAt,
         });
 
         if (acc.ownedBy !== targetUserId) {

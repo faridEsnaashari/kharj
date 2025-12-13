@@ -23,6 +23,7 @@ export type Payment = {
   description?: string;
   isMaman: boolean;
   isFun: boolean;
+  paidAt: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -63,6 +64,10 @@ export class PaymentModel
   @AllowNull(false)
   @Column({ field: 'is_fun', type: DataType.BOOLEAN })
   isFun!: boolean;
+
+  @AllowNull(false)
+  @Column({ field: 'paid_at', type: DataType.DATE })
+  paidAt!: string;
 
   @CreatedAt
   @Column({ field: 'created_at', type: DataType.DATE })
