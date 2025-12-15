@@ -45,6 +45,7 @@ jobs:
             docker-compose build app
 
   deploy:
+    name: DEPLOING KHARJ
     needs: build
     runs-on: ubuntu-latest
 
