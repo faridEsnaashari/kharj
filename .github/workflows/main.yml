@@ -1,4 +1,4 @@
-name: Deploy Kharj
+name: Build And Deploy Kharj
 
 on:
   push:
@@ -6,7 +6,9 @@ on:
 
 jobs:
   build:
+    name: BUILDING KHARJ
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
       - uses: actions/checkout@v4
@@ -41,3 +43,28 @@ jobs:
             docker-compose down phpmyadmin metabase app
 
             docker-compose build app
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Execute remote SSH commands using password
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          port: ${{ secrets.SERVER_PORT }}
+          script: |
+            cd refKharj/
+            git checkout main
+            git pull origin main
+
+            cd docker/
+
+            docker-compose up app phpmyadmin metabase -d
+
+            docker exec -i kharj-app npx --prefix /usr/src/app sequelize-cli db:migrate
