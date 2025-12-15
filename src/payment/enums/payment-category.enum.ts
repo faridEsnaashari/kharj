@@ -1,5 +1,6 @@
 export enum PaymentCategory {
   FOOD = 'FOOD',
+  HALEHOOLE = 'HALEHOOLE',
   GYM_FOOD = 'GYM_FOOD',
   SMOKE = 'SMOKE',
   HOME = 'HOME',
