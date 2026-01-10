@@ -12,6 +12,7 @@ import { PaymentModule } from './payment/payment.module';
 import { ExchangeModule } from './exchange/exchange.module';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
+import { FileModule } from './file/file.module';
 
 @Module({
   //imports: [DatabaseModule, PinoModule, AuthModule, UserModule],
@@ -27,6 +28,7 @@ import { join } from 'path';
     IncomeModule,
     PaymentModule,
     ExchangeModule,
+    FileModule,
   ],
   controllers: [AppController],
   providers: [AppService],
