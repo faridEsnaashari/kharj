@@ -4,7 +4,7 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { PaymentRepository } from './entities/repositories/payment.repository';
-import { User, UserModel } from 'src/user/entities/user.entity';
+import { User } from 'src/user/entities/user.entity';
 import { AccountRepository } from 'src/account/entities/repositories/account.repository';
 import { Payment } from './entities/payment.entity';
 import { selectAccountsForPayment, sortAccounts } from './logics/payment.logic';
@@ -16,7 +16,6 @@ import { UploadPaymentDto } from './dtos/upload-payment.dto';
 import path from 'path';
 import { xlsxToJson } from 'src/file/logics/xlsx.logic';
 import { Bank } from 'src/account/enums/bank.enum';
-import { convertResalatXlsx } from './logics/bank-xlsx/convert-resalat-xlsx.logic';
 import { UncompeletePaymentRepository } from './entities/repositories/uncompelete-payment.repository';
 import {
   CreateUncompeletePayment,
@@ -25,6 +24,9 @@ import {
 import { GetAllUncompeletePaymentsDto } from './dtos/get-all-uncompelete-payment.dto';
 import { WhereOptions } from 'sequelize';
 import { Account } from 'src/account/entities/account.entity';
+import { PaymentTextDto } from './dtos/payment-text.dto';
+import { convertResalatText } from './logics/resalat/convert-resalat-text.logic';
+import { convertResalatXlsx } from './logics/resalat/convert-resalat-xlsx.logic';
 
 @Injectable()
 export class PaymentService {
@@ -126,7 +128,6 @@ export class PaymentService {
 
     const account = await this.accountRepository.findOne({
       where: { userId: user.id, bank: bank },
-      include: { model: UserModel, as: 'user' },
     });
 
     if (!account) {
@@ -184,5 +185,31 @@ export class PaymentService {
     );
 
     return result;
+  }
+
+  async paymentText(dto: PaymentTextDto, user: User) {
+    const { text, bank } = dto;
+
+    const account = await this.accountRepository.findOne({
+      where: { userId: user.id, bank: bank },
+    });
+
+    if (!account) {
+      throw new NotFoundException('account-no-found');
+    }
+
+    let data: Omit<CreateUncompeletePayment, 'accountId'> | null = null;
+
+    if (bank === Bank.RESALAT) {
+      data = convertResalatText(text);
+    }
+
+    if (!data) {
+      throw new UnprocessableEntityException('bank-mapping-failed');
+    }
+
+    const result = { ...data, accountId: account.id };
+
+    return this.uncompeletePaymentRepository.create(result);
   }
 }

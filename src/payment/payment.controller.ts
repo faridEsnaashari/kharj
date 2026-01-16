@@ -72,4 +72,11 @@ export class PaymentController {
   ) {
     return this.paymentService.getAllUncompeletePayments(query, req.user);
   }
+
+  @Post('text')
+  @UsePipes(new ZodValidationPipe(uploadPaymentDtoSchema))
+  @UseGuards(HasAccessGuard)
+  async paymentText(@Body() dto: UploadPaymentDto, @Req() req: { user: User }) {
+    return this.paymentService.uploadBandExport(dto, req.user);
+  }
 }
