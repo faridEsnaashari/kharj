@@ -84,6 +84,7 @@ export class PaymentService {
         const payment = await this.paymentRepository.create({
           accountId: acc.id,
           amount: acc.minus,
+          remain: acc.ballance,
           category: dto.category,
           description: dto.description,
           isFun: dto.isFun,

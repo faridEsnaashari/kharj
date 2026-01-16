@@ -23,6 +23,7 @@ export type Payment = {
   description?: string;
   isMaman: boolean;
   isFun: boolean;
+  remain: number;
   paidAt: string;
   createdAt: string;
   updatedAt: string;
@@ -44,6 +45,10 @@ export class PaymentModel
   @AllowNull(false)
   @Column({ field: 'account_id', type: DataType.INTEGER })
   accountId!: number;
+
+  @AllowNull(true)
+  @Column(DataType.FLOAT)
+  remain!: number;
 
   @AllowNull(false)
   @Column(DataType.FLOAT)
