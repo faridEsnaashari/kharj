@@ -14,10 +14,8 @@ export function convertResalatText(
         jalali: true,
       },
     ).format('YYYY-MM-DD HH:mm:ss'),
-    amount: +text.split(`\n`)[1].split(',').join('').split('-')[1],
-    remain: getPrice(
-      +text.split(`\n`)[3].split(':')[1].split(',').join('') / 1000,
-    ),
+    amount: getPrice(+text.split(`\n`)[1].split(',').join('').split('-')[1]),
+    remain: +text.split(`\n`)[3].split(':')[1].split(',').join(''),
     description: '',
   };
 }

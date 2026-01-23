@@ -28,6 +28,7 @@ import {
   GetAllUncompeletePaymentsDto,
   getAllUncompeletePaymentsDtoSchema,
 } from './dtos/get-all-uncompelete-payment.dto';
+import { PaymentTextDto, PaymentTextDtoSchema } from './dtos/payment-text.dto';
 
 @Controller('payment')
 export class PaymentController {
@@ -74,9 +75,9 @@ export class PaymentController {
   }
 
   @Post('text')
-  @UsePipes(new ZodValidationPipe(uploadPaymentDtoSchema))
+  @UsePipes(new ZodValidationPipe(PaymentTextDtoSchema))
   @UseGuards(HasAccessGuard)
-  async paymentText(@Body() dto: UploadPaymentDto, @Req() req: { user: User }) {
-    return this.paymentService.uploadBandExport(dto, req.user);
+  async paymentText(@Body() dto: PaymentTextDto, @Req() req: { user: User }) {
+    return this.paymentService.paymentText(dto, req.user);
   }
 }

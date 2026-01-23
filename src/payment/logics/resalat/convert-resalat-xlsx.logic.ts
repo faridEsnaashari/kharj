@@ -19,8 +19,8 @@ export function convertResalatXlsx(
       }).format('YYYY-MM-DD HH:mm:ss'),
       referingCode: r['__EMPTY_4'],
       description: r['__EMPTY_7'],
-      amount: getPrice((r['__EMPTY_8'] as unknown as number) / 1000),
-      remain: getPrice((r['__EMPTY_10'] as unknown as number) / 1000),
+      amount: getPrice(r['__EMPTY_8'] as unknown as number),
+      remain: getPrice(r['__EMPTY_10'] as unknown as number),
     }));
 }
 
