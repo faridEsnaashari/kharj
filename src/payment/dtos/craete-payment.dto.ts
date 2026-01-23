@@ -12,6 +12,7 @@ export const createPaymentDtoSchema = z.object({
   isMaman: z.boolean(),
   ownerId: z.number(),
   paidAt: dateTimeDtoSchema.default('2020-01-01'),
+  uncompeletePaymentId: z.number().optional(),
 });
 
 export type CreatePaymentDto = z.infer<typeof createPaymentDtoSchema>;

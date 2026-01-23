@@ -70,6 +70,18 @@ export class PaymentService {
       throw new NotFoundException('No accounts found for this user');
     }
 
+    if (dto.uncompeletePaymentId) {
+      const un = await this.uncompeletePaymentRepository.findOneById(
+        dto.uncompeletePaymentId,
+      );
+
+      if (!un) {
+        throw new NotFoundException(
+          'No uncompelete_payment_id found for this user',
+        );
+      }
+    }
+
     const targetUserId = dto.ownerId || user.id;
     if (!accounts.find((acc) => acc.ownedBy === targetUserId)) {
       throw new NotFoundException('target user id not found');
@@ -105,6 +117,7 @@ export class PaymentService {
           isFun: dto.isFun,
           isMaman: dto.isMaman,
           paidAt: dto.paidAt,
+          uncompeletePaymentId: dto.uncompeletePaymentId,
         });
 
         if (acc.ownedBy !== targetUserId) {
