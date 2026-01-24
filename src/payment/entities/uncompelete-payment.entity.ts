@@ -9,10 +9,12 @@ import {
   Table,
   UpdatedAt,
   BelongsTo,
+  HasOne,
 } from 'sequelize-typescript';
 import { CreateEntity, UpdateEntity } from 'src/common/types/entity.type';
 import { PaymentSource } from '../enums/payment-source.enum';
 import { Account, AccountModel } from 'src/account/entities/account.entity';
+import { Payment, PaymentModel } from './payment.entity';
 
 export type UncompeletePayment = {
   id: number;
@@ -23,17 +25,18 @@ export type UncompeletePayment = {
   remain: number;
   accountId: number;
   account: Account;
+  payment?: Payment;
   createdAt: string;
   updatedAt: string;
 };
 
 export type CreateUncompeletePayment = Omit<
   CreateEntity<UncompeletePayment>,
-  'account'
+  'account' | 'payment'
 >;
 export type UpdateUncompeletePayment = Omit<
   UpdateEntity<UncompeletePayment>,
-  'account'
+  'account' | 'payment'
 >;
 
 @Table({ tableName: 'uncompelete_payments', underscored: true })
@@ -83,4 +86,10 @@ export class UncompeletePaymentModel
     foreignKey: 'accountId',
   })
   account!: Account;
+
+  @HasOne(() => PaymentModel, {
+    as: 'payment',
+    foreignKey: 'uncompeletePaymentId',
+  })
+  payment!: Payment;
 }

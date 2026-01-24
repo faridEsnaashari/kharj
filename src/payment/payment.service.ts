@@ -6,7 +6,7 @@ import {
 import { PaymentRepository } from './entities/repositories/payment.repository';
 import { User } from 'src/user/entities/user.entity';
 import { AccountRepository } from 'src/account/entities/repositories/account.repository';
-import { Payment } from './entities/payment.entity';
+import { Payment, PaymentModel } from './entities/payment.entity';
 import { selectAccountsForPayment, sortAccounts } from './logics/payment.logic';
 import { CreatePaymentDto } from './dtos/craete-payment.dto';
 import { AccountDebtRepository } from 'src/account-debt/entities/repositories/account-debt.repository';
@@ -192,7 +192,14 @@ export class PaymentService {
 
     const result = await this.uncompeletePaymentRepository.pagination(
       {
-        where: { accountId: accountIds.map((a) => a.id) },
+        where: {
+          accountId: accountIds.map((a) => a.id),
+          '$payment.uncompelete_payment_id$': null,
+        },
+        include: {
+          model: PaymentModel,
+          as: 'payment',
+        },
       },
       { page, size },
     );
