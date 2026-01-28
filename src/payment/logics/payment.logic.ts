@@ -55,3 +55,7 @@ export function sortAccounts(
 
   return [targetAcc, ...otherAccs];
 }
+
+export function getPrice(price: number): number {
+  return Math.floor(price / 1000);
+}

@@ -1,9 +1,7 @@
 import * as xlsx from 'xlsx';
-import { Logger } from '../tools/pino/logger.tool';
-import { saveTempPublicFile } from './files.logic';
-import { generateRandomNumber } from '../tools/random.tool';
+import { Logger } from '@nestjs/common';
 
-export function xlsxToJson<T>(filePath: string): T[] | false {
+export function xlsxToJson<T>(filePath: string): T[] | null {
   try {
     const workBook = xlsx.readFile(filePath);
 
@@ -16,11 +14,11 @@ export function xlsxToJson<T>(filePath: string): T[] | false {
     const logger = new Logger('XLSX_EXCEPTION');
     logger.error({ key: 'XLSX_TO_JSON_EXCEPTION', data: err });
 
-    return false;
+    return null;
   }
 }
 
-export async function jsonToXlsx(data: unknown[]): Promise<string | false> {
+export async function jsonToXlsx(data: unknown[]): Promise<Buffer | null> {
   try {
     const worksheet = xlsx.utils.json_to_sheet(data);
 
@@ -30,12 +28,11 @@ export async function jsonToXlsx(data: unknown[]): Promise<string | false> {
 
     const buffer = xlsx.write(workbook, { bookType: 'xlsx', type: 'buffer' });
 
-    const fileName = Date.now() + '' + generateRandomNumber(10) + '.xlsx';
-    return saveTempPublicFile(fileName, buffer);
+    return buffer;
   } catch (err) {
     const logger = new Logger('XLSX_EXCEPTION');
     logger.error({ key: 'JSON_TO_XLSX_EXCEPTION', data: err });
 
-    return false;
+    return null;
   }
 }
