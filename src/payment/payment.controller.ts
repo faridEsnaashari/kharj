@@ -20,6 +20,15 @@ import {
   GetAllPaymentsDto,
   getAllPaymentsDtoSchema,
 } from './dtos/get-all-payment.dto';
+import {
+  UploadPaymentDto,
+  uploadPaymentDtoSchema,
+} from './dtos/upload-payment.dto';
+import {
+  GetAllUncompeletePaymentsDto,
+  getAllUncompeletePaymentsDtoSchema,
+} from './dtos/get-all-uncompelete-payment.dto';
+import { PaymentTextDto, PaymentTextDtoSchema } from './dtos/payment-text.dto';
 
 @Controller('payment')
 export class PaymentController {
@@ -43,5 +52,32 @@ export class PaymentController {
     @Query() query: GetAllPaymentsDto,
   ) {
     return this.paymentService.getAllPayments(query, req.user);
+  }
+
+  @Post('upload/bank-export')
+  @UsePipes(new ZodValidationPipe(uploadPaymentDtoSchema))
+  @UseGuards(HasAccessGuard)
+  async uploadPayment(
+    @Body() dto: UploadPaymentDto,
+    @Req() req: { user: User },
+  ) {
+    return this.paymentService.uploadBandExport(dto, req.user);
+  }
+
+  @Get('uncompeletes')
+  @UseGuards(HasAccessGuard)
+  @UsePipes(new ZodValidationPipe(getAllUncompeletePaymentsDtoSchema))
+  async getAllUncompeletePayments(
+    @Req() req: { user: User },
+    @Query() query: GetAllUncompeletePaymentsDto,
+  ) {
+    return this.paymentService.getAllUncompeletePayments(query, req.user);
+  }
+
+  @Post('text')
+  @UsePipes(new ZodValidationPipe(PaymentTextDtoSchema))
+  @UseGuards(HasAccessGuard)
+  async paymentText(@Body() dto: PaymentTextDto, @Req() req: { user: User }) {
+    return this.paymentService.paymentText(dto, req.user);
   }
 }

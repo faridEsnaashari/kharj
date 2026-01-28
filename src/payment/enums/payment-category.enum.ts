@@ -18,4 +18,5 @@ export enum PaymentCategory {
   COWORK = 'COWORK',
   BEDEHI = 'BEDEHI',
   EXCHANGE = 'EXCHANGE',
+  BANK = 'BANK',
 }

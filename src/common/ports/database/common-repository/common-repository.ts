@@ -27,6 +27,16 @@ export class CommonRepository<
     return raw ? JSON.parse(JSON.stringify(result)) : result;
   }
 
+  async bulkCreate(entity: TCreate[], raw?: true): Promise<T[]>;
+  async bulkCreate(entity: TCreate[], raw?: false): Promise<TModel[]>;
+  async bulkCreate(entity: TCreate[], raw?: boolean): Promise<T[] | TModel[]>;
+  async bulkCreate(entity: TCreate[], raw = true): Promise<T[] | TModel[]> {
+    const result = await this.model.bulkCreate(
+      entity as unknown as MakeNullishOptional<TCreate>[],
+    );
+    return raw ? JSON.parse(JSON.stringify(result)) : result;
+  }
+
   async pagination(
     conditions: FindOptions<T> | WhereOptions<T>,
     ginationData: PaginationData,

@@ -13,6 +13,7 @@ import {
 import { Account, AccountModel } from 'src/account/entities/account.entity';
 import { CreateEntity, UpdateEntity } from 'src/common/types/entity.type';
 import { PaymentCategory } from '../enums/payment-category.enum';
+import { UncompeletePayment } from './uncompelete-payment.entity';
 
 export type Payment = {
   id: number;
@@ -21,6 +22,8 @@ export type Payment = {
   amount: number;
   category: PaymentCategory;
   description?: string;
+  uncompeletePaymentId?: number;
+  uncompeletePayment?: UncompeletePayment;
   isMaman: boolean;
   isFun: boolean;
   remain: number;
@@ -49,6 +52,10 @@ export class PaymentModel
   @AllowNull(true)
   @Column(DataType.FLOAT)
   remain!: number;
+
+  @AllowNull(true)
+  @Column({ field: 'uncompelete_payment_id', type: DataType.INTEGER })
+  uncompeletePaymentId?: number;
 
   @AllowNull(false)
   @Column(DataType.FLOAT)
@@ -87,4 +94,10 @@ export class PaymentModel
     foreignKey: 'account_id',
   })
   account!: Account;
+
+  @BelongsTo(() => AccountModel, {
+    as: 'uncompeletePayment',
+    foreignKey: 'uncompelete_payment_id',
+  })
+  uncompeletePayment!: UncompeletePayment;
 }

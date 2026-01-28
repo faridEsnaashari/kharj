@@ -6,17 +6,33 @@ import {
 import { PaymentRepository } from './entities/repositories/payment.repository';
 import { User } from 'src/user/entities/user.entity';
 import { AccountRepository } from 'src/account/entities/repositories/account.repository';
-import { Payment } from './entities/payment.entity';
+import { Payment, PaymentModel } from './entities/payment.entity';
 import { selectAccountsForPayment, sortAccounts } from './logics/payment.logic';
 import { CreatePaymentDto } from './dtos/craete-payment.dto';
 import { AccountDebtRepository } from 'src/account-debt/entities/repositories/account-debt.repository';
 import { GetAllPaymentsDto } from './dtos/get-all-payment.dto';
 import { Paginated } from 'src/common/types/pagination.type';
+import { UploadPaymentDto } from './dtos/upload-payment.dto';
+import path from 'path';
+import { xlsxToJson } from 'src/file/logics/xlsx.logic';
+import { Bank } from 'src/account/enums/bank.enum';
+import { UncompeletePaymentRepository } from './entities/repositories/uncompelete-payment.repository';
+import {
+  CreateUncompeletePayment,
+  UncompeletePayment,
+} from './entities/uncompelete-payment.entity';
+import { GetAllUncompeletePaymentsDto } from './dtos/get-all-uncompelete-payment.dto';
+import { WhereOptions } from 'sequelize';
+import { Account } from 'src/account/entities/account.entity';
+import { PaymentTextDto } from './dtos/payment-text.dto';
+import { convertResalatText } from './logics/resalat/convert-resalat-text.logic';
+import { convertResalatXlsx } from './logics/resalat/convert-resalat-xlsx.logic';
 
 @Injectable()
 export class PaymentService {
   constructor(
     private paymentRepository: PaymentRepository,
+    private uncompeletePaymentRepository: UncompeletePaymentRepository,
     private accountRepository: AccountRepository,
     private accountDebptRepository: AccountDebtRepository,
   ) {}
@@ -52,6 +68,18 @@ export class PaymentService {
 
     if (accounts?.length === 0) {
       throw new NotFoundException('No accounts found for this user');
+    }
+
+    if (dto.uncompeletePaymentId) {
+      const un = await this.uncompeletePaymentRepository.findOneById(
+        dto.uncompeletePaymentId,
+      );
+
+      if (!un) {
+        throw new NotFoundException(
+          'No uncompelete_payment_id found for this user',
+        );
+      }
     }
 
     const targetUserId = dto.ownerId || user.id;
@@ -90,6 +118,7 @@ export class PaymentService {
           isFun: dto.isFun,
           isMaman: dto.isMaman,
           paidAt: dto.paidAt,
+          uncompeletePaymentId: dto.uncompeletePaymentId,
         });
 
         if (acc.ownedBy !== targetUserId) {
@@ -106,5 +135,102 @@ export class PaymentService {
     );
 
     return payments;
+  }
+
+  async uploadBandExport(dto: UploadPaymentDto, user: User) {
+    const { uploadedFile, bank } = dto;
+
+    const account = await this.accountRepository.findOne({
+      where: { userId: user.id, bank: bank },
+    });
+
+    if (!account) {
+      throw new NotFoundException('account-no-found');
+    }
+
+    const xlsx = xlsxToJson(
+      path.resolve('./uploads/', './bank-upload', `./${uploadedFile}`),
+    );
+
+    if (!xlsx) {
+      throw new UnprocessableEntityException('file-not-found');
+    }
+
+    let data: Omit<CreateUncompeletePayment, 'accountId'>[] | null = null;
+
+    if (bank === Bank.RESALAT) {
+      data = convertResalatXlsx(xlsx as Record<string, string>[]);
+    }
+
+    if (!data) {
+      throw new UnprocessableEntityException('bank-mapping-failed');
+    }
+
+    const result = data.map((d) => ({ ...d, accountId: account.id }));
+
+    return this.uncompeletePaymentRepository.bulkCreate(result);
+  }
+
+  async getAllUncompeletePayments(
+    query: GetAllUncompeletePaymentsDto,
+    user: User,
+  ): Promise<Paginated<UncompeletePayment>> {
+    const { page, size, bank } = query;
+
+    const where: WhereOptions<Account> = { userId: user.id };
+    if (bank) {
+      where.bank = bank;
+    }
+
+    const accountIds = await this.accountRepository.findAll({
+      where,
+      attributes: ['id'],
+    });
+
+    if (accountIds.length < 0) {
+      throw new NotFoundException('No accounts found for this user');
+    }
+
+    const result = await this.uncompeletePaymentRepository.pagination(
+      {
+        where: {
+          accountId: accountIds.map((a) => a.id),
+          '$payment.uncompelete_payment_id$': null,
+        },
+        include: {
+          model: PaymentModel,
+          as: 'payment',
+        },
+      },
+      { page, size },
+    );
+
+    return result;
+  }
+
+  async paymentText(dto: PaymentTextDto, user: User) {
+    const { text, bank } = dto;
+
+    const account = await this.accountRepository.findOne({
+      where: { userId: user.id, bank: bank },
+    });
+
+    if (!account) {
+      throw new NotFoundException('account-no-found');
+    }
+
+    let data: Omit<CreateUncompeletePayment, 'accountId'> | null = null;
+
+    if (bank === Bank.RESALAT) {
+      data = convertResalatText(text);
+    }
+
+    if (!data) {
+      throw new UnprocessableEntityException('bank-mapping-failed');
+    }
+
+    const result = { ...data, accountId: account.id };
+
+    return this.uncompeletePaymentRepository.create(result);
   }
 }
