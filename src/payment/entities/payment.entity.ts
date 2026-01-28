@@ -26,6 +26,7 @@ export type Payment = {
   uncompeletePayment?: UncompeletePayment;
   isMaman: boolean;
   isFun: boolean;
+  remain: number;
   paidAt: string;
   createdAt: string;
   updatedAt: string;
@@ -47,6 +48,10 @@ export class PaymentModel
   @AllowNull(false)
   @Column({ field: 'account_id', type: DataType.INTEGER })
   accountId!: number;
+
+  @AllowNull(true)
+  @Column(DataType.FLOAT)
+  remain!: number;
 
   @AllowNull(true)
   @Column({ field: 'uncompelete_payment_id', type: DataType.INTEGER })
