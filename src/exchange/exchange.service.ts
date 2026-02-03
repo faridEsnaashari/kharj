@@ -57,6 +57,7 @@ export class ExchangeService {
     const payment = await this.paymentRepository.create({
       accountId: fromAcc.id,
       amount,
+      remain: fromAcc.ballance - amount,
       category: PaymentCategory.EXCHANGE,
       isMaman: false,
       isFun: false,

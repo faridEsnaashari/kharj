@@ -8,7 +8,7 @@ export class AuthController {
   constructor(private authService: AuthService) {}
 
   @UsePipes(new ZodValidationPipe(signinDtoSchema))
-  @Post()
+  @Post('signin')
   async signin(@Body() signinDto: SigninDto) {
     return this.authService.signin(signinDto);
   }
