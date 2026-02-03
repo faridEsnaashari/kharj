@@ -57,5 +57,5 @@ export function sortAccounts(
 }
 
 export function getPrice(price: number): number {
-  return Math.floor(price / 1000);
+  return Math.floor(price / 10000);
 }
