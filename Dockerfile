@@ -1,10 +1,6 @@
-FROM node:lts-alpine
+FROM docker-app:latest
 
 WORKDIR /usr/src/app
-
-COPY package*.json ./
-
-RUN npm install 
 
 COPY . . 
 
