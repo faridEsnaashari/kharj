@@ -66,6 +66,6 @@ jobs:
 
             cd docker/
 
-            docker-compose up app phpmyadmin metabase -d
+            docker-compose up app phpmyadmin  -d
 
             docker exec -i kharj-app npx --prefix /usr/src/app sequelize-cli db:migrate
