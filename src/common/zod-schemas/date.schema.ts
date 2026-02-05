@@ -31,11 +31,11 @@ export const dateTimeDtoSchema = z.stringFormat('date-time-dto', (v) => {
 
   if (
     hour?.length !== 2 ||
-    !(+hour > 0) ||
+    !(+hour >= 0) ||
     min?.length !== 2 ||
-    !(+min > 0) ||
+    !(+min >= 0) ||
     sec?.length !== 2 ||
-    !(+sec > 0)
+    !(+sec >= 0)
   ) {
     return false;
   }
