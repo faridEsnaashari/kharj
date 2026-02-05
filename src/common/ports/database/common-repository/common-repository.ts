@@ -39,7 +39,7 @@ export class CommonRepository<
 
   async pagination(
     conditions: FindOptions<T> | WhereOptions<T>,
-    ginationData: PaginationData,
+    paginationData: PaginationData,
     raw?: true,
   ): Promise<Paginated<T>>;
   async pagination(
