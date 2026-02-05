@@ -201,6 +201,7 @@ export class PaymentService {
           model: PaymentModel,
           as: 'payment',
         },
+        order: [['id', 'DESC']],
       },
       { page, size },
     );
