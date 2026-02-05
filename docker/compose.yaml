@@ -11,6 +11,7 @@ services:
     restart: always
     volumes:
       - ../front:/usr/src/app/dist/public/front
+      - ../uploads:/usr/src/app/uploads
     ports:
       - '3005:3005'
     env_file:
