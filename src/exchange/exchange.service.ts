@@ -11,7 +11,6 @@ import { IncomeRepository } from 'src/income/entities/repositories/income.reposi
 import { AccountRepository } from 'src/account/entities/repositories/account.repository';
 import { PaymentCategory } from 'src/payment/enums/payment-category.enum';
 import { IncomeCategory } from 'src/income/enums/income-category.enum';
-import { date } from 'src/common/tools/date/date.tool';
 
 @Injectable()
 export class ExchangeService {
@@ -23,57 +22,72 @@ export class ExchangeService {
   ) {}
 
   async createExchange(dto: CreateExchangeDto, user: User) {
-    const { fromOwner, toOwner, fromAccount, toAccount, amount } = dto;
+    const {
+      fromOwner,
+      toOwner,
+      fromUnit,
+      toUnit,
+      fromAccount,
+      toAccount,
+      fromAmount,
+      toAmount,
+      paidAt,
+    } = dto;
 
     const fromAcc = await this.accountRepository.findOne({
       ownedBy: fromOwner,
       userId: user.id,
       bank: fromAccount,
+      unit: fromUnit,
     });
 
     const toAcc = await this.accountRepository.findOne({
       ownedBy: toOwner,
       userId: user.id,
       bank: toAccount,
+      unit: toUnit,
     });
 
     if (!fromAcc || !toAcc) {
       throw new NotFoundException('account not fount');
     }
 
-    if (fromAcc.ballance < amount) {
+    if (fromAcc.ballance < fromAmount) {
       throw new UnprocessableEntityException('not enugh money');
     }
 
     await this.accountRepository.updateOneById(
-      { ballance: fromAcc.ballance - amount },
+      { ballance: fromAcc.ballance - fromAmount },
       fromAcc.id,
     );
     await this.accountRepository.updateOneById(
-      { ballance: toAcc.ballance + amount },
+      { ballance: toAcc.ballance + toAmount },
       toAcc.id,
     );
 
     const payment = await this.paymentRepository.create({
       accountId: fromAcc.id,
-      amount,
-      remain: fromAcc.ballance - amount,
+      amount: fromAmount,
+      remain: fromAcc.ballance - fromAmount,
       category: PaymentCategory.EXCHANGE,
       isMaman: false,
       isFun: false,
-      paidAt: date().format('YYYY-MM-DD HH:mm:ss'),
+      paidAt,
     });
 
     const income = await this.incomeRepository.create({
       accountId: toAcc.id,
-      amount,
+      remain: toAcc.ballance + toAmount,
+      amount: toAmount,
       category: IncomeCategory.EXCHANGE,
+      paidAt,
     });
 
     return this.exchangeRepository.create({
       paymentId: payment.id,
       incomeId: income.id,
-      amount,
+      fromAmount,
+      toAmount,
     });
   }
 }

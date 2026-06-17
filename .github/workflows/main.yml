@@ -1,71 +1,71 @@
-name: Build And Deploy Kharj
-
-on:
-  push:
-    branches: ['main']
-
-jobs:
-  build:
-    name: BUILDING KHARJ
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Execute remote SSH commands using password
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          password: ${{ secrets.SERVER_PASSWORD }}
-          port: ${{ secrets.SERVER_PORT }}
-          script: |
-            cd refKharj/
-            git checkout main
-            git pull origin main
-
-            cd docker/
-            rm -rf .env
-            cat > .env <<EOF
-            MYSQL_HOST=${{ secrets.MYSQL_HOST }}
-            MYSQL_PORT=${{ secrets.MYSQL_PORT }}
-            MYSQL_USERNAME=${{ secrets.MYSQL_USERNAME }}
-            MYSQL_PASSWORD=${{ secrets.MYSQL_PASSWORD }}
-            MYSQL_DATABASE=${{ secrets.MYSQL_DATABASE }}
-            METABASE_DB_USERNAME=${{ secrets.METABASE_DB_USERNAME }}
-            METABASE_DB_PASSWORD=${{ secrets.METABASE_DB_PASSWORD }}
-            APP_PORT=${{ secrets.APP_PORT }}
-            APP_BASE_URL=${{ secrets.APP_BASE_URL }}
-            JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }}
-            EOF
-
-            docker-compose down phpmyadmin metabase app
-
-            docker-compose build app
-
-  deploy:
-    name: DEPLOING KHARJ
-    needs: build
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Execute remote SSH commands using password
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          password: ${{ secrets.SERVER_PASSWORD }}
-          port: ${{ secrets.SERVER_PORT }}
-          script: |
-            cd refKharj/
-            git checkout main
-            git pull origin main
-
-            cd docker/
-
-            docker-compose up app phpmyadmin  -d
-
-            docker exec -i kharj-app npx --prefix /usr/src/app sequelize-cli db:migrate
+#name: Build And Deploy Kharj
+#
+#on:
+#  push:
+#    branches: ['main']
+#
+#jobs:
+#  build:
+#    name: BUILDING KHARJ
+#    runs-on: ubuntu-latest
+#    timeout-minutes: 10
+#
+#    steps:
+#      - uses: actions/checkout@v4
+#
+#      - name: Execute remote SSH commands using password
+#        uses: appleboy/ssh-action@v1
+#        with:
+#          host: ${{ secrets.SERVER_HOST }}
+#          username: ${{ secrets.SERVER_USER }}
+#          password: ${{ secrets.SERVER_PASSWORD }}
+#          port: ${{ secrets.SERVER_PORT }}
+#          script: |
+#            cd refKharj/
+#            git checkout main
+#            git pull origin main
+#
+#            cd docker/
+#            rm -rf .env
+#            cat > .env <<EOF
+#            MYSQL_HOST=${{ secrets.MYSQL_HOST }}
+#            MYSQL_PORT=${{ secrets.MYSQL_PORT }}
+#            MYSQL_USERNAME=${{ secrets.MYSQL_USERNAME }}
+#            MYSQL_PASSWORD=${{ secrets.MYSQL_PASSWORD }}
+#            MYSQL_DATABASE=${{ secrets.MYSQL_DATABASE }}
+#            METABASE_DB_USERNAME=${{ secrets.METABASE_DB_USERNAME }}
+#            METABASE_DB_PASSWORD=${{ secrets.METABASE_DB_PASSWORD }}
+#            APP_PORT=${{ secrets.APP_PORT }}
+#            APP_BASE_URL=${{ secrets.APP_BASE_URL }}
+#            JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }}
+#            EOF
+#
+#            docker-compose down phpmyadmin metabase app
+#
+#            docker-compose build app
+#
+#  deploy:
+#    name: DEPLOING KHARJ
+#    needs: build
+#    runs-on: ubuntu-latest
+#
+#    steps:
+#      - uses: actions/checkout@v4
+#
+#      - name: Execute remote SSH commands using password
+#        uses: appleboy/ssh-action@v1
+#        with:
+#          host: ${{ secrets.SERVER_HOST }}
+#          username: ${{ secrets.SERVER_USER }}
+#          password: ${{ secrets.SERVER_PASSWORD }}
+#          port: ${{ secrets.SERVER_PORT }}
+#          script: |
+#            cd refKharj/
+#            git checkout main
+#            git pull origin main
+#
+#            cd docker/
+#
+#            docker-compose up app phpmyadmin  -d
+#
+#            docker exec -i kharj-app npx --prefix /usr/src/app sequelize-cli db:migrate

@@ -13,6 +13,7 @@ import { ExchangeModule } from './exchange/exchange.module';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
 import { FileModule } from './file/file.module';
+import { UncompletePaymentsModule } from './uncomplete-payment/uncomplete-payment.module';
 
 @Module({
   //imports: [DatabaseModule, PinoModule, AuthModule, UserModule],
@@ -29,6 +30,7 @@ import { FileModule } from './file/file.module';
     PaymentModule,
     ExchangeModule,
     FileModule,
+    UncompletePaymentsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

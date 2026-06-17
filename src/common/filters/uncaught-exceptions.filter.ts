@@ -17,13 +17,14 @@ export class UncaughtExceptionFilter implements ExceptionFilter {
       key: 'UNCAUGHT_EXCEPTION',
       data: {
         message: exp?.message,
+        exception,
       },
     });
 
     response.status(500).json({
       sucess: false,
       message: exp.message || 'something bad happend',
-      data: exp.getResponse && exp.getResponse(),
+      data: (exp.getResponse && exp.getResponse()) || exp,
     });
   }
 }

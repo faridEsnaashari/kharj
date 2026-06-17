@@ -14,6 +14,10 @@ async function bootstrap() {
   for (const file of commandFiles) {
     const command: Command = (await import(`${file}`)).command;
 
+    if (command.cmd !== process.argv.slice(2)[0]) {
+      continue;
+    }
+
     const argv = await y
       .command(command.cmd, command.describe || '', command.flags || {})
       .parse();

@@ -5,6 +5,7 @@ import {
   Column,
   CreatedAt,
   DataType,
+  Default,
   Model,
   PrimaryKey,
   Table,
@@ -12,6 +13,7 @@ import {
 } from 'sequelize-typescript';
 import { CreateEntity, UpdateEntity } from 'src/common/types/entity.type';
 import { User, UserModel } from 'src/user/entities/user.entity';
+import { Unit } from '../enums/unit.enum';
 
 export type Account = {
   id: number;
@@ -21,6 +23,7 @@ export type Account = {
   ownedBy: number;
   ballance: number;
   bank: string;
+  unit: Unit;
   priority: number;
   createdAt: string;
   updatedAt: string;
@@ -58,6 +61,11 @@ export class AccountModel
   @AllowNull(false)
   @Column
   priority!: number;
+
+  @AllowNull(false)
+  @Default(Unit.RIAL)
+  @Column(DataType.STRING)
+  unit!: Unit;
 
   @CreatedAt
   @Column(DataType.DATE)

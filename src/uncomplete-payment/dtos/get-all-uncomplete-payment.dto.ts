@@ -1,7 +1,7 @@
 import { Bank } from 'src/account/enums/bank.enum';
 import { z } from 'zod';
 
-export const getAllUncompeletePaymentsDtoSchema = z.object({
+export const getAllUncompletePaymentsDtoSchema = z.object({
   page: z
     .string()
     .optional()
@@ -16,6 +16,6 @@ export const getAllUncompeletePaymentsDtoSchema = z.object({
   bank: z.enum(Bank).optional(),
 });
 
-export type GetAllUncompeletePaymentsDto = z.infer<
-  typeof getAllUncompeletePaymentsDtoSchema
+export type GetAllUncompletePaymentsDto = z.infer<
+  typeof getAllUncompletePaymentsDtoSchema
 >;

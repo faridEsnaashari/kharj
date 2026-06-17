@@ -11,7 +11,7 @@ export class ResponseInterceptor implements NestInterceptor {
   intercept(context: ExecutionContext, next: CallHandler) {
     return next.handle().pipe(
       map((data) =>
-        data?.count && data?.rows
+        data?.count !== null && data?.count !== undefined && data?.rows
           ? { rows: data.rows, paginationData: { total: data.count } }
           : data,
       ),

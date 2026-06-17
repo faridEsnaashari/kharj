@@ -5,7 +5,7 @@ const { DataType } = require('sequelize-typescript');
 /** @type {import('sequelize-cli').Migration} */
 module.exports = {
   async up(queryInterface) {
-    queryInterface.createTable('uncompelete_payments', {
+    queryInterface.createTable('uncomplete_payments', {
       id: {
         type: DataType.BIGINT.UNSIGNED,
         allowNull: false,

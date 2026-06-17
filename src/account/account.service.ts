@@ -16,15 +16,16 @@ export class AccountService {
   }
 
   async createAccount(dto: CreateAccountDto, user: User) {
-    const { ownedBy, bank } = dto;
+    const { ownedBy, bank, unit } = dto;
 
     await this.userRepository.findOneByIdOrFail(user.id);
-    await this.userRepository.findOneByIdOrFail(dto.ownedBy);
+    await this.userRepository.findOneByIdOrFail(ownedBy);
 
     const acc = await this.accountRepository.findOne({
       userId: user.id,
       ownedBy,
       bank,
+      unit,
     });
 
     if (acc) {
