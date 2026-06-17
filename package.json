@@ -7,6 +7,7 @@
   "license": "UNLICENSED",
   "scripts": {
     "commander": "npx ts-node -r tsconfig-paths/register src/common/command/commander.ts",
+    "start:local": "./src/scripts/run-local.script.sh",
     "build": "nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "NODE_ENV=develop nest start",
@@ -14,7 +15,7 @@
     "start:debug": "NODE_ENV=develop nest start --debug --watch",
     "start:prod": "NODE_ENV=production node dist/src/main",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
-    "test": "npx ts-node -r tsconfig-paths/register tmp/a.ts",
+    "test": "npx ts-node -T -r tsconfig-paths/register tmp/a.ts",
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",

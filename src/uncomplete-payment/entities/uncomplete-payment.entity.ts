@@ -10,39 +10,44 @@ import {
   UpdatedAt,
   BelongsTo,
   HasOne,
+  Default,
 } from 'sequelize-typescript';
 import { CreateEntity, UpdateEntity } from 'src/common/types/entity.type';
-import { PaymentSource } from '../enums/payment-source.enum';
 import { Account, AccountModel } from 'src/account/entities/account.entity';
-import { Payment, PaymentModel } from './payment.entity';
+import { UncompletePaymentSource } from '../enums/uncomplete-payment-source.enum';
+import { Payment, PaymentModel } from 'src/payment/entities/payment.entity';
+import { UncompletePaymentType } from '../enums/uncomplete-payment-type.enum';
+import { Income, IncomeModel } from 'src/income/entities/income.entity';
 
-export type UncompeletePayment = {
+export type UncompletePayment = {
   id: number;
   amount: number;
   description: string;
   paidAt: string;
-  source: PaymentSource;
+  source: UncompletePaymentSource;
   remain: number;
   accountId: number;
   account: Account;
+  type: UncompletePaymentType;
   payment?: Payment;
+  income?: Income;
   createdAt: string;
   updatedAt: string;
 };
 
-export type CreateUncompeletePayment = Omit<
-  CreateEntity<UncompeletePayment>,
+export type CreateUncompletePayment = Omit<
+  CreateEntity<UncompletePayment>,
   'account' | 'payment'
 >;
-export type UpdateUncompeletePayment = Omit<
-  UpdateEntity<UncompeletePayment>,
+export type UpdateUncompletePayment = Omit<
+  UpdateEntity<UncompletePayment>,
   'account' | 'payment'
 >;
 
-@Table({ tableName: 'uncompelete_payments', underscored: true })
-export class UncompeletePaymentModel
-  extends Model<UncompeletePayment, CreateUncompeletePayment>
-  implements UncompeletePayment
+@Table({ tableName: 'uncomplete_payments', underscored: true })
+export class UncompletePaymentModel
+  extends Model<UncompletePayment, CreateUncompletePayment>
+  implements UncompletePayment
 {
   @PrimaryKey
   @AutoIncrement
@@ -67,7 +72,12 @@ export class UncompeletePaymentModel
 
   @AllowNull(false)
   @Column(DataType.STRING)
-  source!: PaymentSource;
+  source!: UncompletePaymentSource;
+
+  @AllowNull(false)
+  @Default(UncompletePaymentType.PAYMENT)
+  @Column(DataType.STRING)
+  type!: UncompletePaymentType;
 
   @AllowNull(false)
   @Column(DataType.FLOAT)
@@ -87,9 +97,15 @@ export class UncompeletePaymentModel
   })
   account!: Account;
 
+  @HasOne(() => IncomeModel, {
+    as: 'income',
+    foreignKey: 'uncompletePaymentId',
+  })
+  income!: Income;
+
   @HasOne(() => PaymentModel, {
     as: 'payment',
-    foreignKey: 'uncompeletePaymentId',
+    foreignKey: 'uncompletePaymentId',
   })
   payment!: Payment;
 }

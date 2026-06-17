@@ -1,6 +1,11 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
-import { FindOptions, WhereOptions } from 'sequelize';
+import {
+  Attributes,
+  DestroyOptions,
+  FindOptions,
+  WhereOptions,
+} from 'sequelize';
 import { Model, ModelCtor } from 'sequelize-typescript';
 import { MakeNullishOptional } from 'sequelize/types/utils';
 import { Paginated, PaginationData } from 'src/common/types/pagination.type';
@@ -117,6 +122,12 @@ export class CommonRepository<
     return raw ? JSON.parse(JSON.stringify(result)) : result;
   }
 
+  async update(data: TUpdate, conditions: WhereOptions<T>): Promise<void> {
+    await this.model.update(data as Partial<T>, {
+      where: { ...conditions } as unknown as WhereOptions<T>,
+    });
+  }
+
   async updateOneById(data: TUpdate, id: number): Promise<void> {
     await this.model.update(data as Partial<T>, {
       where: { id } as unknown as WhereOptions<T>,
@@ -163,5 +174,15 @@ export class CommonRepository<
     }
 
     return result;
+  }
+
+  async delete(
+    conditions: DestroyOptions<Attributes<TModel>>,
+  ): Promise<number> {
+    return this.model.destroy(conditions);
+  }
+
+  async deleteById(id: number): Promise<number> {
+    return this.delete({ where: { id } } as unknown as Attributes<TModel>);
   }
 }

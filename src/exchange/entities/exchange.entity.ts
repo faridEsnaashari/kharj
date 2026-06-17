@@ -20,7 +20,8 @@ export type Exchange = {
   payment: PaymentModel;
   incomeId: number;
   income: IncomeModel;
-  amount: number;
+  toAmount: number;
+  fromAmount: number;
   createdAt: string;
   updatedAt: string;
 };
@@ -47,8 +48,12 @@ export class ExchangeModel
   incomeId!: number;
 
   @AllowNull(false)
-  @Column(DataType.INTEGER)
-  amount!: number;
+  @Column(DataType.FLOAT)
+  fromAmount!: number;
+
+  @AllowNull(false)
+  @Column(DataType.FLOAT)
+  toAmount!: number;
 
   @CreatedAt
   @Column(DataType.DATE)

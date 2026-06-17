@@ -5,4 +5,5 @@ export enum IncomeCategory {
   LOAN = 'LOAN',
   EXCHANGE = 'EXCHANGE',
   SNAPP = 'SNAPP',
+  MS = 'MS',
 }

@@ -8,8 +8,8 @@ import { AccountModel } from 'src/account/entities/account.entity';
 import { AccountDebtModel } from 'src/account-debt/entities/account-debt.entity';
 import { AccountRepository } from 'src/account/entities/repositories/account.repository';
 import { AccountDebtRepository } from 'src/account-debt/entities/repositories/account-debt.repository';
-import { UncompeletePaymentModel } from './entities/uncompelete-payment.entity';
-import { UncompeletePaymentRepository } from './entities/repositories/uncompelete-payment.repository';
+import { UncompletePaymentModel } from 'src/uncomplete-payment/entities/uncomplete-payment.entity';
+import { UncompletePaymentRepository } from 'src/uncomplete-payment/entities/repositories/uncomplete-payment.repository';
 //import { AuthModule } from 'src/auth/auth.module';
 
 @Module({
@@ -19,7 +19,7 @@ import { UncompeletePaymentRepository } from './entities/repositories/uncompelet
       PaymentModel,
       AccountModel,
       AccountDebtModel,
-      UncompeletePaymentModel,
+      UncompletePaymentModel,
     ]),
   ],
   providers: [
@@ -27,7 +27,7 @@ import { UncompeletePaymentRepository } from './entities/repositories/uncompelet
     PaymentRepository,
     AccountRepository,
     AccountDebtRepository,
-    UncompeletePaymentRepository,
+    UncompletePaymentRepository,
   ],
   controllers: [PaymentController],
 })

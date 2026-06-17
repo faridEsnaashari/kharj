@@ -16,9 +16,10 @@ export class IncomeService {
   }
 
   async createIncome(dto: CreateIncomeDto, reqUser: User) {
-    const { bank, userId, amount } = dto;
+    const { bank, userId, amount, unit } = dto;
     const acc = await this.accountRepository.findOneOrFail({
       bank,
+      unit,
       userId: reqUser.id,
       ownedBy: userId,
     });
@@ -26,6 +27,7 @@ export class IncomeService {
     await this.incomeRepository.create({
       ...dto,
       accountId: acc.id,
+      remain: acc.ballance + amount,
     });
 
     return this.accountRepository.updateOneById(
