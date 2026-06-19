@@ -22,30 +22,16 @@ export class ExchangeService {
   ) {}
 
   async createExchange(dto: CreateExchangeDto, user: User) {
-    const {
-      fromOwner,
-      toOwner,
-      fromUnit,
-      toUnit,
-      fromAccount,
-      toAccount,
-      fromAmount,
-      toAmount,
-      paidAt,
-    } = dto;
+    const { fromAccountId, toAccountId, fromAmount, toAmount, paidAt } = dto;
 
     const fromAcc = await this.accountRepository.findOne({
-      ownedBy: fromOwner,
+      id: fromAccountId,
       userId: user.id,
-      bank: fromAccount,
-      unit: fromUnit,
     });
 
     const toAcc = await this.accountRepository.findOne({
-      ownedBy: toOwner,
+      id: toAccountId,
       userId: user.id,
-      bank: toAccount,
-      unit: toUnit,
     });
 
     if (!fromAcc || !toAcc) {

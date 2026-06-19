@@ -4,13 +4,12 @@ import { AccountController } from './account.controller';
 import { AccountModel } from './entities/account.entity';
 import { AccountService } from './account.service';
 import { AccountRepository } from './entities/repositories/account.repository';
-//import { AuthModule } from 'src/auth/auth.module';
+import { UnitModel } from 'src/unit/entities/unit.entity';
+import { UnitRepository } from 'src/unit/entities/repositories/unit.repository';
 
 @Module({
-  //imports: [SequelizeModule.forFeature([AccountModel]), AuthModule],
-  imports: [SequelizeModule.forFeature([AccountModel])],
-  providers: [AccountService, AccountRepository],
+  imports: [SequelizeModule.forFeature([AccountModel, UnitModel])],
+  providers: [AccountService, AccountRepository, UnitRepository],
   controllers: [AccountController],
-  exports: [AccountRepository],
 })
 export class AccountModule {}

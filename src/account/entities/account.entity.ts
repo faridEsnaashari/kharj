@@ -5,7 +5,6 @@ import {
   Column,
   CreatedAt,
   DataType,
-  Default,
   Model,
   PrimaryKey,
   Table,
@@ -13,7 +12,7 @@ import {
 } from 'sequelize-typescript';
 import { CreateEntity, UpdateEntity } from 'src/common/types/entity.type';
 import { User, UserModel } from 'src/user/entities/user.entity';
-import { Unit } from '../enums/unit.enum';
+import { Unit, UnitModel } from 'src/unit/entities/unit.entity';
 
 export type Account = {
   id: number;
@@ -23,14 +22,21 @@ export type Account = {
   ownedBy: number;
   ballance: number;
   bank: string;
+  unitId: number;
   unit: Unit;
   priority: number;
   createdAt: string;
   updatedAt: string;
 };
 
-export type CreateAccount = Omit<CreateEntity<Account>, 'user' | 'owner'>;
-export type UpdateAccount = Omit<UpdateEntity<Account>, 'user' | 'owner'>;
+export type CreateAccount = Omit<
+  CreateEntity<Account>,
+  'user' | 'owner' | 'unit'
+>;
+export type UpdateAccount = Omit<
+  UpdateEntity<Account>,
+  'user' | 'owner' | 'unit'
+>;
 
 @Table({ tableName: 'accounts', underscored: true })
 export class AccountModel
@@ -63,9 +69,8 @@ export class AccountModel
   priority!: number;
 
   @AllowNull(false)
-  @Default(Unit.RIAL)
-  @Column(DataType.STRING)
-  unit!: Unit;
+  @Column
+  unitId!: number;
 
   @CreatedAt
   @Column(DataType.DATE)
@@ -86,4 +91,10 @@ export class AccountModel
     foreignKey: 'ownedBy',
   })
   owner!: User;
+
+  @BelongsTo(() => UnitModel, {
+    as: 'unit',
+    foreignKey: 'unitId',
+  })
+  unit!: Unit;
 }
