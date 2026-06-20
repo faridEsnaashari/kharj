@@ -1,4 +1,3 @@
-import { Bank } from 'src/account/enums/bank.enum';
 import { z } from 'zod';
 
 export const getAllUncompletePaymentsDtoSchema = z.object({
@@ -13,7 +12,10 @@ export const getAllUncompletePaymentsDtoSchema = z.object({
     .default('20')
     .transform((v) => +v),
 
-  bank: z.enum(Bank).optional(),
+  bankId: z
+    .string()
+    .optional()
+    .transform((v) => (v ? +v : undefined)),
 });
 
 export type GetAllUncompletePaymentsDto = z.infer<

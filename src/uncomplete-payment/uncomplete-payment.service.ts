@@ -5,12 +5,13 @@ import {
 } from '@nestjs/common';
 import { User } from 'src/user/entities/user.entity';
 import { AccountRepository } from 'src/account/entities/repositories/account.repository';
+import { BankRepository } from 'src/bank/entities/repositories/bank.repository';
 import { PaymentModel } from '../payment/entities/payment.entity';
 import { Paginated } from 'src/common/types/pagination.type';
 import { UploadPaymentDto } from './dtos/upload-payment.dto';
 import path from 'path';
 import { xlsxToJson } from 'src/file/logics/xlsx.logic';
-import { Bank } from 'src/account/enums/bank.enum';
+import { BankProvider } from 'src/bank/enums/bank-provider.enum';
 import { UncompletePaymentRepository } from './entities/repositories/uncomplete-payment.repository';
 import {
   CreateUncompletePayment,
@@ -30,18 +31,21 @@ export class UncompletePaymentService {
   constructor(
     private uncompletePaymentRepository: UncompletePaymentRepository,
     private accountRepository: AccountRepository,
+    private bankRepository: BankRepository,
   ) {}
 
   async uploadBandExport(dto: UploadPaymentDto, user: User) {
-    const { uploadedFile, bank } = dto;
+    const { uploadedFile, bankId } = dto;
 
     const account = await this.accountRepository.findOne({
-      where: { userId: user.id, bank: bank },
+      where: { userId: user.id, bankId },
     });
 
     if (!account) {
       throw new NotFoundException('account-no-found');
     }
+
+    const bank = await this.bankRepository.findOneByIdOrFail(bankId);
 
     const xlsx = xlsxToJson(
       path.resolve('./uploads/', './bank-upload', `./${uploadedFile}`),
@@ -53,7 +57,7 @@ export class UncompletePaymentService {
 
     let data: Omit<CreateUncompletePayment, 'accountId'>[] | null = null;
 
-    if (bank === Bank.RESALAT) {
+    if (bank.symbol === BankProvider.RESALAT) {
       data = convertResalatXlsx(xlsx as Record<string, string>[]);
     }
 
@@ -70,11 +74,11 @@ export class UncompletePaymentService {
     query: GetAllUncompletePaymentsDto,
     user: User,
   ): Promise<Paginated<UncompletePayment>> {
-    const { page, size, bank } = query;
+    const { page, size, bankId } = query;
 
     const where: WhereOptions<Account> = { userId: user.id };
-    if (bank) {
-      where.bank = bank;
+    if (bankId) {
+      where.bankId = bankId;
     }
 
     const accountIds = await this.accountRepository.findAll({
@@ -112,19 +116,21 @@ export class UncompletePaymentService {
   }
 
   async paymentText(dto: PaymentTextDto, user: User) {
-    const { text, bank } = dto;
+    const { text, bankId } = dto;
 
     const account = await this.accountRepository.findOne({
-      where: { userId: user.id, bank: bank },
+      where: { userId: user.id, bankId },
     });
 
     if (!account) {
       throw new NotFoundException('account-no-found');
     }
 
+    const bank = await this.bankRepository.findOneByIdOrFail(bankId);
+
     let data: Omit<CreateUncompletePayment, 'accountId'> | null = null;
 
-    if (bank === Bank.RESALAT) {
+    if (bank.symbol === BankProvider.RESALAT) {
       data = convertResalatText(text);
     }
 

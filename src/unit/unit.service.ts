@@ -3,6 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { Op } from 'sequelize';
 import { UnitRepository } from './entities/repositories/unit.repository';
 import { CreateUnitDto } from './dtos/create-unit.dto';
 import { UpdateUnitDto } from './dtos/update-unit.dto';
@@ -17,11 +18,16 @@ export class UnitService {
   ) {}
 
   async findAllUnits(user: User) {
-    return this.unitRepository.findAll({ userId: user.id });
+    return this.unitRepository.findAll({
+      [Op.or]: [{ userId: null }, { userId: user.id }],
+    });
   }
 
   async findOneUnit(id: number, user: User) {
-    const unit = await this.unitRepository.findOne({ id, userId: user.id });
+    const unit = await this.unitRepository.findOne({
+      id,
+      [Op.or]: [{ userId: null }, { userId: user.id }],
+    });
 
     if (!unit) {
       throw new NotFoundException('unit-not-found');
@@ -32,8 +38,8 @@ export class UnitService {
 
   async createUnit(dto: CreateUnitDto, user: User) {
     const existing = await this.unitRepository.findOne({
-      userId: user.id,
       symbol: dto.symbol,
+      [Op.or]: [{ userId: null }, { userId: user.id }],
     });
 
     if (existing) {
@@ -44,11 +50,15 @@ export class UnitService {
   }
 
   async updateUnit(id: number, dto: UpdateUnitDto, user: User) {
-    await this.findOneUnit(id, user);
+    const unit = await this.unitRepository.findOne({ id, userId: user.id });
+
+    if (!unit) {
+      throw new NotFoundException('unit-not-found');
+    }
 
     const existing = await this.unitRepository.findOne({
-      userId: user.id,
       symbol: dto.symbol,
+      [Op.or]: [{ userId: null }, { userId: user.id }],
     });
 
     if (existing && existing.id !== id) {
@@ -61,7 +71,11 @@ export class UnitService {
   }
 
   async deleteUnit(id: number, user: User) {
-    await this.findOneUnit(id, user);
+    const unit = await this.unitRepository.findOne({ id, userId: user.id });
+
+    if (!unit) {
+      throw new NotFoundException('unit-not-found');
+    }
 
     const accountsUsingUnit = await this.accountRepository.findAll({
       unitId: id,

@@ -13,7 +13,7 @@ import {
 import { CreateEntity, UpdateEntity } from 'src/common/types/entity.type';
 import { User, UserModel } from 'src/user/entities/user.entity';
 
-export type Unit = {
+export type Bank = {
   id: number;
   userId: number | null;
   user?: User;
@@ -23,11 +23,11 @@ export type Unit = {
   updatedAt: string;
 };
 
-export type CreateUnit = Omit<CreateEntity<Unit>, 'user'>;
-export type UpdateUnit = Omit<UpdateEntity<Unit>, 'user'>;
+export type CreateBank = Omit<CreateEntity<Bank>, 'user'>;
+export type UpdateBank = Omit<UpdateEntity<Bank>, 'user'>;
 
-@Table({ tableName: 'units', underscored: true })
-export class UnitModel extends Model<Unit, CreateUnit> implements Unit {
+@Table({ tableName: 'banks', underscored: true })
+export class BankModel extends Model<Bank, CreateBank> implements Bank {
   @PrimaryKey
   @AutoIncrement
   @Column

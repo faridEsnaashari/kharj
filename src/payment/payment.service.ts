@@ -48,7 +48,7 @@ export class PaymentService {
 
   async createPayment(dto: CreatePaymentDto, user: User): Promise<Payment[]> {
     const accounts = await this.accountRepository.findAll({
-      where: { userId: user.id, bank: dto.bank, unitId: dto.unitId },
+      where: { userId: user.id, bankId: dto.bankId, unitId: dto.unitId },
       order: [['priority', 'ASC']],
     });
 

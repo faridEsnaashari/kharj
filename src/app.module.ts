@@ -14,6 +14,7 @@ import { join } from 'path';
 import { FileModule } from './file/file.module';
 import { UncompletePaymentsModule } from './uncomplete-payment/uncomplete-payment.module';
 import { UnitModule } from './unit/unit.module';
+import { BankModule } from './bank/bank.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { UnitModule } from './unit/unit.module';
     UserModule,
     AuthModule,
     UnitModule,
+    BankModule,
     AccountModule,
     IncomeModule,
     PaymentModule,

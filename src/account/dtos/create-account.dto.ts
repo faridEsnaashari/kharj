@@ -1,11 +1,10 @@
 import { z } from 'zod';
-import { Bank } from '../enums/bank.enum';
 
 export const createAccountDtoSchema = z
   .object({
     ownedBy: z.number(),
     ballance: z.number(),
-    bank: z.enum(Bank),
+    bankId: z.number(),
     unitId: z.number(),
     priority: z.number(),
   })
