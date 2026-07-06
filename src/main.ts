@@ -1,6 +1,8 @@
+import { config } from 'dotenv';
+config();
+
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
-import { config } from 'dotenv';
 import { appConfigs } from './app.configs';
 import { Logger } from 'nestjs-pino';
 import { Logger as L } from './common/tools/pino/logger.tool';
@@ -11,7 +13,6 @@ import { NestExpressApplication } from '@nestjs/platform-express';
 //import { resolve } from 'path';
 
 async function bootstrap() {
-  config();
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     bufferLogs: true,
   });

@@ -1,18 +1,33 @@
 import { Module } from '@nestjs/common';
 import { SequelizeModule } from '@nestjs/sequelize';
-import { config } from 'dotenv';
-
-config();
+import { databaseConfig } from './sequelize-cli.config';
+import { appConfigs } from 'src/app.configs';
 
 @Module({
   imports: [
     SequelizeModule.forRoot({
       dialect: 'mysql',
-      host: process.env.MYSQL_HOST,
-      port: process.env.MYSQL_PORT ? +process.env.MYSQL_PORT : 3609,
-      username: process.env.MYSQL_USERNAME,
-      password: process.env.MYSQL_PASSWORD,
-      database: process.env.MYSQL_DATABASE,
+      host:
+        appConfigs.nodeEnv === 'develop'
+          ? databaseConfig.development.host
+          : databaseConfig.production.host,
+      port:
+        appConfigs.nodeEnv === 'develop'
+          ? databaseConfig.development.port
+          : databaseConfig.production.port,
+      username:
+        appConfigs.nodeEnv === 'develop'
+          ? databaseConfig.development.username
+          : databaseConfig.production.username,
+      password:
+        appConfigs.nodeEnv === 'develop'
+          ? databaseConfig.development.password
+          : databaseConfig.production.password,
+      database:
+        appConfigs.nodeEnv === 'develop'
+          ? databaseConfig.development.database
+          : databaseConfig.production.database,
+
       models: [],
       autoLoadModels: true,
       synchronize: true,
