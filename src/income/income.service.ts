@@ -1,8 +1,16 @@
 import { Injectable } from '@nestjs/common';
+import { WhereOptions } from 'sequelize';
 import { IncomeRepository } from './entities/repositories/income.repository';
 import { CreateIncomeDto } from './dtos/create-income.dto';
+import { UpdateIncomeDto } from './dtos/update-income.dto';
+import { GetAllIncomeDto } from './dtos/get-all-income.dto';
 import { AccountRepository } from 'src/account/entities/repositories/account.repository';
 import { User } from 'src/user/entities/user.entity';
+import { Account, AccountModel } from 'src/account/entities/account.entity';
+import { Income, UpdateIncome } from './entities/income.entity';
+import { BankModel } from 'src/bank/entities/bank.entity';
+import { UnitModel } from 'src/unit/entities/unit.entity';
+import { calculateUpdatedBalance } from './logics/income.logic';
 
 @Injectable()
 export class IncomeService {
@@ -12,26 +20,109 @@ export class IncomeService {
   ) {}
 
   async findOneIncome(id: number) {
-    return this.incomeRepository.findOneById(id);
+    return this.incomeRepository.findOneByIdOrFail(id);
   }
 
-  async createIncome(dto: CreateIncomeDto, reqUser: User) {
-    const { accountId, amount } = dto;
+  async getAllIncomes(query: GetAllIncomeDto, user: User) {
+    const accountWhere: WhereOptions<Account> = {
+      userId: user.id,
+      ...(query.bankId ? { bankId: query.bankId } : {}),
+      ...(query.unitId ? { unitId: query.unitId } : {}),
+      ...(query.ownedBy ? { ownedBy: query.ownedBy } : {}),
+    };
 
-    const acc = await this.accountRepository.findOneOrFail({
-      id: accountId,
-      userId: reqUser.id,
+    const accounts = await this.accountRepository.findAll({
+      where: accountWhere,
+      attributes: ['id'],
     });
+
+    const accountIds = accounts.map((a) => a.id);
+
+    const incomeWhere: WhereOptions<Income> = {
+      accountId: accountIds,
+      ...(query.category ? { category: query.category } : {}),
+    };
+
+    return this.incomeRepository.pagination(
+      {
+        where: incomeWhere,
+        include: [
+          {
+            model: AccountModel,
+            as: 'account',
+            attributes: ['id', 'ownedBy', 'bankId', 'unitId'],
+            include: [
+              {
+                model: BankModel,
+                as: 'bank',
+                attributes: ['id', 'name', 'symbol'],
+              },
+              {
+                model: UnitModel,
+                as: 'unit',
+                attributes: ['id', 'name', 'symbol'],
+              },
+            ],
+          },
+        ],
+        order: [['paidAt', 'DESC']],
+      },
+      { page: query.page, size: query.size },
+    );
+  }
+
+  async createIncome(dto: CreateIncomeDto, user: User) {
+    const account = await this.accountRepository.findOneOrFail({
+      where: { id: dto.accountId, userId: user.id },
+    });
+
+    const newBalance = account.ballance + dto.amount;
 
     await this.incomeRepository.create({
       ...dto,
-      accountId: acc.id,
-      remain: acc.ballance + amount,
+      remain: newBalance,
     });
 
     return this.accountRepository.updateOneById(
-      { ballance: acc.ballance + amount },
-      acc.id,
+      { ballance: newBalance },
+      account.id,
     );
+  }
+
+  async updateIncome(id: number, dto: UpdateIncomeDto, user: User) {
+    const income = (await this.incomeRepository.findOneOrFail({
+      where: { id },
+      include: [
+        {
+          model: AccountModel,
+          as: 'account',
+          where: { userId: user.id },
+          required: true,
+        },
+      ],
+    })) as unknown as Income;
+
+    const newBalance = calculateUpdatedBalance(
+      income.account.ballance,
+      income.amount,
+      dto.amount,
+    );
+
+    await this.accountRepository.updateOneById(
+      { ballance: newBalance },
+      income.accountId,
+    );
+
+    const incomeUpdate: UpdateIncome = {
+      amount: dto.amount,
+      remain: newBalance,
+      category: dto.category,
+      description: dto.description,
+      paidAt: dto.paidAt,
+    };
+
+    await this.incomeRepository.updateOneById(incomeUpdate, id);
+
+    return this.incomeRepository.findOneByIdOrFail(id);
   }
 }

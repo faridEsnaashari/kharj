@@ -3,13 +3,19 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Op } from 'sequelize';
+import { Op, WhereOptions } from 'sequelize';
 import { AccountRepository } from './entities/repositories/account.repository';
 import { CreateAccountDto } from './dtos/create-account.dto';
+import { GetAllAccountsDto } from './dtos/get-all-account.dto';
+import { GetAccountStatisticDto } from './dtos/get-account-statistic.dto';
 import { UserRepository } from 'src/user/entities/repositories/user.repository';
-import { User } from 'src/user/entities/user.entity';
+import { User, UserModel } from 'src/user/entities/user.entity';
 import { UnitRepository } from 'src/unit/entities/repositories/unit.repository';
+import { UnitModel } from 'src/unit/entities/unit.entity';
 import { BankRepository } from 'src/bank/entities/repositories/bank.repository';
+import { BankModel } from 'src/bank/entities/bank.entity';
+import { Account } from './entities/account.entity';
+import { groupAccountsByUnit } from './logics/account.logic';
 
 @Injectable()
 export class AccountService {
@@ -20,8 +26,60 @@ export class AccountService {
     private bankRepository: BankRepository,
   ) {}
 
-  async findOneAccount(id: number) {
-    return this.accountRepository.findOneById(id);
+  async findAllAccounts(query: GetAllAccountsDto, user: User) {
+    const where: WhereOptions<Account> = {
+      userId: user.id,
+      ...(query.ownedBy ? { ownedBy: query.ownedBy } : {}),
+      ...(query.bankId ? { bankId: query.bankId } : {}),
+      ...(query.unitId ? { unitId: query.unitId } : {}),
+    };
+
+    return this.accountRepository.pagination(
+      {
+        where,
+        include: [
+          { model: UserModel, as: 'owner', attributes: ['id', 'name'] },
+          {
+            model: BankModel,
+            as: 'bank',
+            attributes: ['id', 'name', 'symbol'],
+          },
+          {
+            model: UnitModel,
+            as: 'unit',
+            attributes: ['id', 'name', 'symbol'],
+          },
+        ],
+      },
+      { page: query.page, size: query.size },
+    );
+  }
+
+  async findOneAccount(id: number, user: User) {
+    return this.accountRepository.findOneOrFail({
+      where: { id, userId: user.id },
+      include: [
+        { model: UserModel, as: 'owner', attributes: ['id', 'name'] },
+        { model: BankModel, as: 'bank', attributes: ['id', 'name', 'symbol'] },
+        { model: UnitModel, as: 'unit', attributes: ['id', 'name', 'symbol'] },
+      ],
+    });
+  }
+
+  async getStatistic(query: GetAccountStatisticDto, user: User) {
+    const where: WhereOptions<Account> = {
+      userId: user.id,
+      ...(query.unitId ? { unitId: query.unitId } : {}),
+    };
+
+    const accounts = await this.accountRepository.findAll({
+      where,
+      include: [
+        { model: UnitModel, as: 'unit', attributes: ['id', 'name', 'symbol'] },
+      ],
+    });
+
+    return groupAccountsByUnit(accounts);
   }
 
   async createAccount(dto: CreateAccountDto, user: User) {
@@ -48,14 +106,14 @@ export class AccountService {
       throw new NotFoundException('bank-not-found');
     }
 
-    const acc = await this.accountRepository.findOne({
+    const existing = await this.accountRepository.findOne({
       userId: user.id,
       ownedBy,
       bankId,
       unitId,
     });
 
-    if (acc) {
+    if (existing) {
       throw new ConflictException('account-exist');
     }
 

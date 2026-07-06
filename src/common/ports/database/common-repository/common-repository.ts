@@ -185,4 +185,8 @@ export class CommonRepository<
   async deleteById(id: number): Promise<number> {
     return this.delete({ where: { id } } as unknown as Attributes<TModel>);
   }
+
+  async count(conditions: WhereOptions<T>): Promise<number> {
+    return this.model.count({ where: conditions });
+  }
 }

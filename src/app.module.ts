@@ -15,6 +15,8 @@ import { FileModule } from './file/file.module';
 import { UncompletePaymentsModule } from './uncomplete-payment/uncomplete-payment.module';
 import { UnitModule } from './unit/unit.module';
 import { BankModule } from './bank/bank.module';
+import { TransactionModule } from './transaction/transaction.module';
+import { DebtModule } from './debt/debt.module';
 
 @Module({
   imports: [
@@ -33,6 +35,8 @@ import { BankModule } from './bank/bank.module';
     ExchangeModule,
     FileModule,
     UncompletePaymentsModule,
+    TransactionModule,
+    DebtModule,
   ],
   controllers: [AppController],
   providers: [AppService],

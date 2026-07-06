@@ -1,7 +1,7 @@
 import { z } from 'zod';
-import { PaymentCategory } from '../enums/payment-category.enum';
+import { IncomeCategory } from '../enums/income-category.enum';
 
-export const getAllPaymentsDtoSchema = z.object({
+export const getAllIncomeDtoSchema = z.object({
   page: z
     .string()
     .optional()
@@ -24,7 +24,7 @@ export const getAllPaymentsDtoSchema = z.object({
     .string()
     .optional()
     .transform((v) => (v ? +v : undefined)),
-  category: z.enum(PaymentCategory).optional(),
+  category: z.enum(IncomeCategory).optional(),
 });
 
-export type GetAllPaymentsDto = z.infer<typeof getAllPaymentsDtoSchema>;
+export type GetAllIncomeDto = z.infer<typeof getAllIncomeDtoSchema>;

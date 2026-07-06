@@ -3,16 +3,28 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
+import { WhereOptions } from 'sequelize';
 import { PaymentRepository } from './entities/repositories/payment.repository';
 import { User } from 'src/user/entities/user.entity';
 import { AccountRepository } from 'src/account/entities/repositories/account.repository';
-import { Payment } from './entities/payment.entity';
-import { selectAccountsForPayment, sortAccounts } from './logics/payment.logic';
+import { Account, AccountModel } from 'src/account/entities/account.entity';
+import { Payment, UpdatePayment } from './entities/payment.entity';
+import {
+  selectAccountsForPayment,
+  sortAccounts,
+  restoreBalance,
+  deductBalance,
+  hasSufficientBalance,
+} from './logics/payment.logic';
 import { CreatePaymentDto } from './dtos/craete-payment.dto';
-import { AccountDebtRepository } from 'src/account-debt/entities/repositories/account-debt.repository';
+import { UpdatePaymentDto } from './dtos/update-payment.dto';
 import { GetAllPaymentsDto } from './dtos/get-all-payment.dto';
-import { Paginated } from 'src/common/types/pagination.type';
+import { AccountDebtRepository } from 'src/account-debt/entities/repositories/account-debt.repository';
+import { UpdateAccountDebt } from 'src/account-debt/entities/account-debt.entity';
 import { UncompletePaymentRepository } from 'src/uncomplete-payment/entities/repositories/uncomplete-payment.repository';
+import { Paginated } from 'src/common/types/pagination.type';
+import { BankModel } from 'src/bank/entities/bank.entity';
+import { UnitModel } from 'src/unit/entities/unit.entity';
 
 @Injectable()
 export class PaymentService {
@@ -20,30 +32,58 @@ export class PaymentService {
     private paymentRepository: PaymentRepository,
     private uncompletePaymentRepository: UncompletePaymentRepository,
     private accountRepository: AccountRepository,
-    private accountDebptRepository: AccountDebtRepository,
+    private accountDebtRepository: AccountDebtRepository,
   ) {}
 
   async getAllPayments(
     query: GetAllPaymentsDto,
     user: User,
   ): Promise<Paginated<Payment>> {
-    const accountIds = await this.accountRepository.findAll({
-      where: { userId: user.id },
+    const accountWhere: WhereOptions<Account> = {
+      userId: user.id,
+      ...(query.bankId ? { bankId: query.bankId } : {}),
+      ...(query.unitId ? { unitId: query.unitId } : {}),
+      ...(query.ownedBy ? { ownedBy: query.ownedBy } : {}),
+    };
+
+    const accounts = await this.accountRepository.findAll({
+      where: accountWhere,
       attributes: ['id'],
     });
 
-    if (accountIds.length < 0) {
-      throw new NotFoundException('No accounts found for this user');
-    }
+    const accountIds = accounts.map((a) => a.id);
 
-    const payments = await this.paymentRepository.pagination(
+    const paymentWhere: WhereOptions<Payment> = {
+      accountId: accountIds,
+      ...(query.category ? { category: query.category } : {}),
+    };
+
+    return this.paymentRepository.pagination(
       {
-        where: { accountId: accountIds.map((a) => a.id) },
+        where: paymentWhere,
+        include: [
+          {
+            model: AccountModel,
+            as: 'account',
+            attributes: ['id', 'ownedBy', 'bankId', 'unitId'],
+            include: [
+              {
+                model: BankModel,
+                as: 'bank',
+                attributes: ['id', 'name', 'symbol'],
+              },
+              {
+                model: UnitModel,
+                as: 'unit',
+                attributes: ['id', 'name', 'symbol'],
+              },
+            ],
+          },
+        ],
+        order: [['paidAt', 'DESC']],
       },
       { page: query.page, size: query.size },
     );
-
-    return payments;
   }
 
   async createPayment(dto: CreatePaymentDto, user: User): Promise<Payment[]> {
@@ -52,8 +92,8 @@ export class PaymentService {
       order: [['priority', 'ASC']],
     });
 
-    if (accounts?.length === 0) {
-      throw new NotFoundException('No accounts found for this user');
+    if (accounts.length === 0) {
+      throw new NotFoundException('no-accounts-found');
     }
 
     if (dto.uncompletePaymentId) {
@@ -62,26 +102,24 @@ export class PaymentService {
       );
 
       if (!un) {
-        throw new NotFoundException(
-          'No uncomplete_payment_id found for this user',
-        );
+        throw new NotFoundException('uncomplete-payment-not-found');
       }
     }
 
     const targetUserId = dto.ownerId || user.id;
+
     if (!accounts.find((acc) => acc.ownedBy === targetUserId)) {
-      throw new NotFoundException('target user id not found');
+      throw new NotFoundException('target-user-not-found');
     }
 
     const sortedAccounts = sortAccounts(accounts, targetUserId);
-
     const { selectedAccounts, remain } = selectAccountsForPayment(
       sortedAccounts,
       dto.price,
     );
 
     if (remain > 0) {
-      throw new UnprocessableEntityException('not enugh money in accounts');
+      throw new UnprocessableEntityException('insufficient-balance');
     }
 
     await Promise.all(
@@ -108,7 +146,7 @@ export class PaymentService {
         });
 
         if (acc.ownedBy !== targetUserId) {
-          await this.accountDebptRepository.create({
+          await this.accountDebtRepository.create({
             amount: acc.minus,
             paymentId: payment.id,
             fromUserId: acc.ownedBy,
@@ -121,5 +159,59 @@ export class PaymentService {
     );
 
     return payments;
+  }
+
+  async updatePayment(
+    id: number,
+    dto: UpdatePaymentDto,
+    user: User,
+  ): Promise<Payment> {
+    const payment = (await this.paymentRepository.findOneOrFail({
+      where: { id },
+      include: [
+        {
+          model: AccountModel,
+          as: 'account',
+          where: { userId: user.id },
+          required: true,
+        },
+      ],
+    })) as unknown as Payment;
+
+    const restored = restoreBalance(payment.account.ballance, payment.amount);
+
+    if (!hasSufficientBalance(restored, dto.price)) {
+      throw new UnprocessableEntityException('insufficient-balance');
+    }
+
+    const newBalance = deductBalance(restored, dto.price);
+
+    await this.accountRepository.updateOneById(
+      { ballance: newBalance },
+      payment.accountId,
+    );
+
+    const debt = await this.accountDebtRepository.findOne({
+      where: { paymentId: id },
+    });
+
+    if (debt) {
+      const debtUpdate: UpdateAccountDebt = { amount: dto.price };
+      await this.accountDebtRepository.updateOneById(debtUpdate, debt.id);
+    }
+
+    const paymentUpdate: UpdatePayment = {
+      amount: dto.price,
+      remain: newBalance,
+      category: dto.category,
+      description: dto.description,
+      isFun: dto.isFun,
+      isMaman: dto.isMaman,
+      paidAt: dto.paidAt,
+    };
+
+    await this.paymentRepository.updateOneById(paymentUpdate, id);
+
+    return this.paymentRepository.findOneByIdOrFail(id);
   }
 }
