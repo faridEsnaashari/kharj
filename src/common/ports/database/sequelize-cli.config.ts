@@ -1,6 +1,4 @@
-const {} = require('dotenv').config();
-
-module.exports = {
+export const databaseConfig = {
   development: {
     host: process.env.STAGE_MYSQL_HOST || 'localhost',
     port: process.env.STAGE_MYSQL_PORT ? +process.env.STAGE_MYSQL_PORT : 3306,

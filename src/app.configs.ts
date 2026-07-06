@@ -3,4 +3,6 @@ export const appConfigs = {
   appBaseUrl: process.env.APP_BASE_URL
     ? process.env.APP_BASE_URL
     : 'http://localhost:3000',
+
+  nodeEnv: process.env.NODE_ENV ? process.env.NODE_ENV : 'develop',
 };
