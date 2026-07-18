@@ -11,18 +11,37 @@ debts automatically. The name "خرج" means "expense" in Persian.
 
 ---
 
+## Working Rules
+
+- **Apply changes directly to the files — do not commit.** Make the edits in the working
+  tree and stop there. Only run `git commit` (or push) when explicitly asked to.
+
+---
+
+## Maintaining This File
+
+After making any change to the project (code, schema, migrations, API routes,
+conventions, tooling), update `CLAUDE.md` in the same change so it stays accurate.
+Treat this file as part of the deliverable — if what you changed makes anything here
+wrong or incomplete (structure, API reference, business logic, conventions), fix it.
+
+---
+
 ## Repository Structure
 ```
 
-/
-├── backend/ NestJS API
-└── frontend/ React + Vite SPA
+projects/kharj/                 working directory (not a git repo itself)
+├── kharj/                      Backend — NestJS API  (this CLAUDE.md lives here)
+└── kharjf/
+    └── kharj/                  Frontend — React + Vite SPA
 
 ```
 
 ---
 
 ## Backend
+
+Location: `kharj/`
 
 ### Stack
 - **Framework:** NestJS
@@ -416,9 +435,19 @@ DB_PASS=...
 
 ## Frontend
 
+Location: `kharjf/kharj/`
+
+### Current Status — Active Rewrite
+
+The frontend is **being redeveloped from scratch** against a new set of Visly UI
+screens. Treat existing frontend code as provisional: it may be replaced wholesale
+rather than patched. When a new screen arrives, prefer building it fresh in the
+established structure over retrofitting what is already there.
+
 ### Stack
 
-- **Framework:** React + Vite
+- **Framework:** React + Vite — **client-side only** (SPA, no SSR, no server runtime).
+  All data comes from the backend API over HTTP.
 - **Language:** JavaScript (JSX)
 - **HTTP:** Axios (configured in `src/features/auth/api/api.config.js`)
 - **Styling:** CSS modules per feature (`auth.css`)
@@ -473,12 +502,53 @@ Logout         → removeAuthToken()  → AUTH_STATES.SIGNIN
 
 ### UI Design System
 
-Designs come from Visly. CSS class prefix: `visily-`. Dark theme, blue accents.
-Screens: Signup, Signin, Dashboard, Accounts List, Account Details, New Payment,
-Payment Review, Payment Result, Payments Inbox, Debts Ledger, Profile/Settings.
+Designs come from Visly and are sent in as screen images. CSS class prefix: `visily-`.
+Dark theme, blue accents. Screens: Signup, Signin, Dashboard, Accounts List, Account
+Details, New Payment, Payment Review, Payment Result, Payments Inbox, Debts Ledger,
+Profile/Settings.
 
-The Visily designs are used as a template — layout, button styles, and input styles
-are followed, but field names and flow may differ from the mockups.
+#### The screens are a template, not a specification
+
+This is the most important rule when implementing a screen from a Visly mockup.
+
+**Follow the design for — the visual language:**
+
+- Buttons: shape, size, radius, colours, hover/active/disabled states
+- Inputs: field styling, labels, placeholders, focus and error states
+- Layout: spacing, grid, alignment, card/panel structure
+- Typography, colour palette, iconography
+
+**Do _not_ copy literally — the content:**
+
+- Field names and labels — use the real domain fields from the backend API
+  (e.g. `ballance`, `ownedBy`, `unitId`), not whatever the mockup happens to show
+- Which fields appear on a screen — add, remove, or reorder as the real data requires
+- Screen flow and navigation between steps
+- Placeholder/sample data in the mockup — it is filler, never a data contract
+
+When the mockup and the actual API disagree, **the API wins**. Build the real
+functionality and dress it in the mockup's visual style. Do not invent backend fields
+to match a mockup, and do not drop a required field because the mockup omits it.
+
+#### Mockup Files
+
+Reference screens live in `kharjf/kharj/tmp/visly/` as PNGs — read them directly with
+the Read tool when implementing a screen:
+
+```
+visily-signup.png
+visily-dashboard.png
+visily-accounts-list.png
+visily-account-details.png
+visily-new-payment.png
+visily-payment-review.png
+visily-payment-result.png
+visily-payments-inbox.png
+visily-debts-ledger.png
+visily-profile-&-settings.png
+```
+
+There is no Signin mockup — derive Signin from the Signup screen's styling.
 
 ### Running the Frontend
 
