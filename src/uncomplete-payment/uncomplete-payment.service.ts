@@ -22,6 +22,11 @@ import { Account } from 'src/account/entities/account.entity';
 import { PaymentTextDto } from './dtos/payment-text.dto';
 import { convertResalatText } from './logics/resalat/convert-resalat-text.logic';
 import { convertResalatXlsx } from './logics/resalat/convert-resalat-xlsx.logic';
+import { convertPasargadText } from './logics/pasargad/convert-pasargad-text.logic';
+import {
+  convertPasargadXlsx,
+  PasargadBillRow,
+} from './logics/pasargad/convert-pasargad-xlsx.logic';
 import { IncomeModel } from 'src/income/entities/income.entity';
 import { DeleteUncompletePaymentsDto } from './dtos/delete-uncomplete-payment.dto';
 
@@ -55,6 +60,10 @@ export class UncompletePaymentService {
 
     if (bank === Bank.RESALAT) {
       data = convertResalatXlsx(xlsx as Record<string, string>[]);
+    }
+
+    if (bank === Bank.PASARGAD) {
+      data = convertPasargadXlsx(xlsx as PasargadBillRow[]);
     }
 
     if (!data) {
@@ -126,6 +135,10 @@ export class UncompletePaymentService {
 
     if (bank === Bank.RESALAT) {
       data = convertResalatText(text);
+    }
+
+    if (bank === Bank.PASARGAD) {
+      data = convertPasargadText(text);
     }
 
     if (!data) {
