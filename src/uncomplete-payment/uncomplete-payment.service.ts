@@ -67,11 +67,11 @@ export class UncompletePaymentService {
       data = convertResalatXlsx(xlsx as Record<string, string>[]);
     }
 
-    if (bank === Bank.PASARGAD) {
+    if (bank.symbol === BankProvider.PASARGAD) {
       data = convertPasargadXlsx(xlsx as PasargadBillRow[]);
     }
 
-    if (bank === Bank.MELY) {
+    if (bank.symbol === BankProvider.MELY) {
       data = convertMelyXlsx(xlsx as Record<string, string>[]);
     }
 
@@ -148,7 +148,7 @@ export class UncompletePaymentService {
       data = convertResalatText(text);
     }
 
-    if (bank === Bank.PASARGAD) {
+    if (bank.symbol === BankProvider.PASARGAD) {
       data = convertPasargadText(text);
     }
 
