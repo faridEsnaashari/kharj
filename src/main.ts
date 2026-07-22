@@ -6,6 +6,7 @@ import { AppModule } from './app.module';
 import { appConfigs } from './app.configs';
 import { Logger } from 'nestjs-pino';
 import { Logger as L } from './common/tools/pino/logger.tool';
+import { FilteredLogger } from './common/tools/pino/filtered-logger.tool';
 import { UncaughtExceptionFilter } from './common/filters/uncaught-exceptions.filter';
 import { HttpExceptionFilter } from './common/filters/http-exceptions.filter';
 import { ResponseInterceptor } from './common/interseptors/response.interseptor';
@@ -16,7 +17,7 @@ async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     bufferLogs: true,
   });
-  app.useLogger(app.get(Logger));
+  app.useLogger(new FilteredLogger(app.get(Logger)));
 
   app.enableCors();
 

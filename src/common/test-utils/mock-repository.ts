@@ -11,6 +11,7 @@ export type MockRepository = {
   findOneOrFail: jest.Mock;
   delete: jest.Mock;
   deleteById: jest.Mock;
+  count: jest.Mock;
 };
 
 export function createMockRepository(): MockRepository {
@@ -27,5 +28,6 @@ export function createMockRepository(): MockRepository {
     findOneOrFail: jest.fn(),
     delete: jest.fn(),
     deleteById: jest.fn(),
+    count: jest.fn(),
   };
 }

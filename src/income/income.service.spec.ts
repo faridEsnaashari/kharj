@@ -7,6 +7,8 @@ import {
 } from 'src/common/test-utils/mock-repository';
 import { User } from 'src/user/entities/user.entity';
 import { CreateIncomeDto } from './dtos/create-income.dto';
+import { UpdateIncomeDto } from './dtos/update-income.dto';
+import { GetAllIncomeDto } from './dtos/get-all-income.dto';
 import { IncomeCategory } from './enums/income-category.enum';
 
 describe('IncomeService', () => {
@@ -18,7 +20,7 @@ describe('IncomeService', () => {
   const dto: CreateIncomeDto = {
     accountId: 5,
     amount: 200,
-    category: 'SALARY' as IncomeCategory,
+    category: IncomeCategory.HOGHOOGH,
     paidAt: '2024-01-01',
   };
 
@@ -43,8 +45,7 @@ describe('IncomeService', () => {
     await service.createIncome(dto, user);
 
     expect(accountRepository.findOneOrFail).toHaveBeenCalledWith({
-      id: 5,
-      userId: user.id,
+      where: { id: 5, userId: user.id },
     });
     expect(incomeRepository.create).toHaveBeenCalledWith({
       ...dto,
@@ -58,8 +59,116 @@ describe('IncomeService', () => {
   });
 
   it('findOneIncome passes through to the repository', async () => {
-    incomeRepository.findOneById.mockResolvedValue({ id: 1 });
+    incomeRepository.findOneByIdOrFail.mockResolvedValue({ id: 1 });
 
     await expect(service.findOneIncome(1)).resolves.toEqual({ id: 1 });
+    expect(incomeRepository.findOneByIdOrFail).toHaveBeenCalledWith(1);
+  });
+
+  it('getAllIncomes resolves the user account ids and filters incomes by them', async () => {
+    accountRepository.findAll.mockResolvedValue([{ id: 1 }, { id: 2 }]);
+    incomeRepository.pagination.mockResolvedValue({ rows: [], count: 0 });
+
+    const query = { page: 1, size: 20 } as GetAllIncomeDto;
+
+    await service.getAllIncomes(query, user);
+
+    expect(accountRepository.findAll).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { userId: 1 } }),
+    );
+    expect(incomeRepository.pagination).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { accountId: [1, 2] } }),
+      { page: 1, size: 20 },
+    );
+  });
+
+  it('getAllIncomes applies account and category filters', async () => {
+    accountRepository.findAll.mockResolvedValue([{ id: 1 }]);
+    incomeRepository.pagination.mockResolvedValue({ rows: [], count: 0 });
+
+    const query = {
+      page: 1,
+      size: 20,
+      bankId: 10,
+      unitId: 20,
+      ownedBy: 2,
+      category: IncomeCategory.LOAN,
+    } as GetAllIncomeDto;
+
+    await service.getAllIncomes(query, user);
+
+    expect(accountRepository.findAll).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { userId: 1, bankId: 10, unitId: 20, ownedBy: 2 },
+      }),
+    );
+    expect(incomeRepository.pagination).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { accountId: [1], category: IncomeCategory.LOAN },
+      }),
+      { page: 1, size: 20 },
+    );
+  });
+
+  describe('updateIncome', () => {
+    const updateDto: UpdateIncomeDto = {
+      amount: 150,
+      category: IncomeCategory.HOGHOOGH,
+      paidAt: '2024-01-02',
+    };
+
+    beforeEach(() => {
+      incomeRepository.findOneOrFail.mockResolvedValue({
+        id: 9,
+        amount: 100,
+        accountId: 5,
+        account: { ballance: 300 },
+      });
+      accountRepository.updateOneById.mockResolvedValue(undefined);
+      incomeRepository.updateOneById.mockResolvedValue(undefined);
+      incomeRepository.findOneByIdOrFail.mockResolvedValue({ id: 9 });
+    });
+
+    it('reverses the original amount and applies the new one to the account', async () => {
+      await service.updateIncome(9, updateDto, user);
+
+      // 300 - 100 (original) + 150 (new) = 350
+      expect(accountRepository.updateOneById).toHaveBeenCalledWith(
+        { ballance: 350 },
+        5,
+      );
+    });
+
+    it('persists the new amount and running balance on the income', async () => {
+      await service.updateIncome(9, updateDto, user);
+
+      expect(incomeRepository.updateOneById).toHaveBeenCalledWith(
+        {
+          amount: 150,
+          remain: 350,
+          category: updateDto.category,
+          description: undefined,
+          paidAt: updateDto.paidAt,
+        },
+        9,
+      );
+    });
+
+    it('only touches incomes owned by the requesting user', async () => {
+      await service.updateIncome(9, updateDto, user);
+
+      const findArgs = incomeRepository.findOneOrFail.mock
+        .calls[0][0] as unknown as {
+        include: Array<{ where: { userId: number } }>;
+      };
+
+      expect(findArgs.include[0].where).toEqual({ userId: 1 });
+    });
+
+    it('returns the freshly loaded income', async () => {
+      await expect(service.updateIncome(9, updateDto, user)).resolves.toEqual({
+        id: 9,
+      });
+    });
   });
 });

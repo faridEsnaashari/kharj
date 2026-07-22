@@ -3,6 +3,9 @@ import {
   selectAccountsForPayment,
   sortAccounts,
   getPrice,
+  restoreBalance,
+  deductBalance,
+  hasSufficientBalance,
 } from './payment.logic';
 
 function buildAccount(overrides: Partial<Account>): Account {
@@ -109,5 +112,39 @@ describe('selectAccountsForPayment', () => {
 
     expect(selectedAccounts).toHaveLength(1);
     expect(selectedAccounts[0].id).toBe(1);
+  });
+});
+
+describe('restoreBalance', () => {
+  it('adds the originally paid amount back to the balance', () => {
+    expect(restoreBalance(300, 100)).toBe(400);
+  });
+
+  it('works with a zero paid amount', () => {
+    expect(restoreBalance(300, 0)).toBe(300);
+  });
+});
+
+describe('deductBalance', () => {
+  it('subtracts the new amount from the restored balance', () => {
+    expect(deductBalance(400, 250)).toBe(150);
+  });
+
+  it('can consume the whole balance', () => {
+    expect(deductBalance(400, 400)).toBe(0);
+  });
+});
+
+describe('hasSufficientBalance', () => {
+  it('accepts when the balance covers the amount exactly', () => {
+    expect(hasSufficientBalance(400, 400)).toBe(true);
+  });
+
+  it('accepts when the balance exceeds the amount', () => {
+    expect(hasSufficientBalance(400, 100)).toBe(true);
+  });
+
+  it('rejects when the balance falls short', () => {
+    expect(hasSufficientBalance(399, 400)).toBe(false);
   });
 });

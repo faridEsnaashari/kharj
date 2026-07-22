@@ -14,6 +14,8 @@ import {
 import { User } from 'src/user/entities/user.entity';
 import { Account } from 'src/account/entities/account.entity';
 import { CreatePaymentDto } from './dtos/craete-payment.dto';
+import { UpdatePaymentDto } from './dtos/update-payment.dto';
+import { GetAllPaymentsDto } from './dtos/get-all-payment.dto';
 import { PaymentCategory } from './enums/payment-category.enum';
 
 function buildAccount(overrides: Partial<Account>): Account {
@@ -41,7 +43,7 @@ describe('PaymentService', () => {
     price: 100,
     bankId: 10,
     unitId: 20,
-    category: PaymentCategory.FOOD ?? ('FOOD' as PaymentCategory),
+    category: PaymentCategory.FOOD,
     isFun: false,
     isMaman: false,
     ownerId: 1,
@@ -138,6 +140,125 @@ describe('PaymentService', () => {
       paymentId: expect.any(Number),
       fromUserId: 2,
       toUserId: 1,
+    });
+  });
+
+  it('getAllPayments resolves the user account ids and filters payments by them', async () => {
+    accountRepository.findAll.mockResolvedValue([{ id: 1 }, { id: 2 }]);
+    paymentRepository.pagination.mockResolvedValue({ rows: [], count: 0 });
+
+    const query = { page: 1, size: 20 } as GetAllPaymentsDto;
+
+    await service.getAllPayments(query, user);
+
+    expect(accountRepository.findAll).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { userId: 1 } }),
+    );
+    expect(paymentRepository.pagination).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { accountId: [1, 2] } }),
+      { page: 1, size: 20 },
+    );
+  });
+
+  it('getAllPayments applies account and category filters', async () => {
+    accountRepository.findAll.mockResolvedValue([{ id: 1 }]);
+    paymentRepository.pagination.mockResolvedValue({ rows: [], count: 0 });
+
+    const query = {
+      page: 1,
+      size: 20,
+      bankId: 10,
+      unitId: 20,
+      ownedBy: 2,
+      category: PaymentCategory.RENT,
+    } as GetAllPaymentsDto;
+
+    await service.getAllPayments(query, user);
+
+    expect(accountRepository.findAll).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { userId: 1, bankId: 10, unitId: 20, ownedBy: 2 },
+      }),
+    );
+    expect(paymentRepository.pagination).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { accountId: [1], category: PaymentCategory.RENT },
+      }),
+      { page: 1, size: 20 },
+    );
+  });
+
+  describe('updatePayment', () => {
+    const updateDto: UpdatePaymentDto = {
+      price: 250,
+      category: PaymentCategory.FOOD,
+      isFun: false,
+      isMaman: false,
+      paidAt: '2024-01-02',
+    };
+
+    beforeEach(() => {
+      // account balance 300 with an original payment of 100 → 400 restorable
+      paymentRepository.findOneOrFail.mockResolvedValue({
+        id: 7,
+        amount: 100,
+        accountId: 5,
+        account: { ballance: 300 },
+      });
+      accountDebptRepository.findOne.mockResolvedValue(null);
+      paymentRepository.updateOneById.mockResolvedValue(undefined);
+      paymentRepository.findOneByIdOrFail.mockResolvedValue({ id: 7 });
+    });
+
+    it('reverses the original amount before applying the new price', async () => {
+      await service.updatePayment(7, updateDto, user);
+
+      // 300 + 100 (restore) - 250 (new price) = 150
+      expect(accountRepository.updateOneById).toHaveBeenCalledWith(
+        { ballance: 150 },
+        5,
+      );
+    });
+
+    it('persists the new price and running balance on the payment', async () => {
+      await service.updatePayment(7, updateDto, user);
+
+      expect(paymentRepository.updateOneById).toHaveBeenCalledWith(
+        expect.objectContaining({ amount: 250, remain: 150 }),
+        7,
+      );
+    });
+
+    it('throws UnprocessableEntityException when the restored balance cannot cover the new price', async () => {
+      await expect(
+        service.updatePayment(7, { ...updateDto, price: 500 }, user),
+      ).rejects.toThrow(UnprocessableEntityException);
+
+      expect(accountRepository.updateOneById).not.toHaveBeenCalled();
+      expect(paymentRepository.updateOneById).not.toHaveBeenCalled();
+    });
+
+    it('updates the linked debt amount when one exists', async () => {
+      accountDebptRepository.findOne.mockResolvedValue({ id: 3 });
+
+      await service.updatePayment(7, updateDto, user);
+
+      expect(accountDebptRepository.updateOneById).toHaveBeenCalledWith(
+        { amount: 250 },
+        3,
+      );
+    });
+
+    it('leaves debts untouched when none is linked to the payment', async () => {
+      await service.updatePayment(7, updateDto, user);
+
+      expect(accountDebptRepository.updateOneById).not.toHaveBeenCalled();
+    });
+
+    it('returns the freshly loaded payment', async () => {
+      await expect(service.updatePayment(7, updateDto, user)).resolves.toEqual({
+        id: 7,
+      });
     });
   });
 });
