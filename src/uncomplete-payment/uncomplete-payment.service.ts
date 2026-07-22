@@ -27,6 +27,7 @@ import {
   convertPasargadXlsx,
   PasargadBillRow,
 } from './logics/pasargad/convert-pasargad-xlsx.logic';
+import { convertMelyXlsx } from './logics/mely/convert-mely-xlsx.logic';
 import { IncomeModel } from 'src/income/entities/income.entity';
 import { DeleteUncompletePaymentsDto } from './dtos/delete-uncomplete-payment.dto';
 
@@ -64,6 +65,10 @@ export class UncompletePaymentService {
 
     if (bank === Bank.PASARGAD) {
       data = convertPasargadXlsx(xlsx as PasargadBillRow[]);
+    }
+
+    if (bank === Bank.MELY) {
+      data = convertMelyXlsx(xlsx as Record<string, string>[]);
     }
 
     if (!data) {

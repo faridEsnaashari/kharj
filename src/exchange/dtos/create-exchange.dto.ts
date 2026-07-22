@@ -13,6 +13,7 @@ export const createExchangeDtoSchema = z
     toAmount: z.number(),
     fromOwner: z.number(),
     toOwner: z.number(),
+    toUser: z.number(),
     paidAt: dateTimeDtoSchema.default('2020-01-01'),
   })
   .required();
