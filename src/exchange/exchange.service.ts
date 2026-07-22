@@ -25,6 +25,7 @@ export class ExchangeService {
     const {
       fromOwner,
       toOwner,
+      toUser,
       fromUnit,
       toUnit,
       fromAccount,
@@ -43,7 +44,7 @@ export class ExchangeService {
 
     const toAcc = await this.accountRepository.findOne({
       ownedBy: toOwner,
-      userId: user.id,
+      userId: toUser,
       bank: toAccount,
       unit: toUnit,
     });
