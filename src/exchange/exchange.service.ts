@@ -22,7 +22,8 @@ export class ExchangeService {
   ) {}
 
   async createExchange(dto: CreateExchangeDto, user: User) {
-    const { fromAccountId, toAccountId, fromAmount, toAmount, paidAt } = dto;
+    const { fromAccountId, toAccountId, toUser, fromAmount, toAmount, paidAt } =
+      dto;
 
     const fromAcc = await this.accountRepository.findOne({
       id: fromAccountId,
@@ -31,7 +32,7 @@ export class ExchangeService {
 
     const toAcc = await this.accountRepository.findOne({
       id: toAccountId,
-      userId: user.id,
+      userId: toUser,
     });
 
     if (!fromAcc || !toAcc) {

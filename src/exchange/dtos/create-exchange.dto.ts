@@ -7,6 +7,7 @@ export const createExchangeDtoSchema = z
     toAccountId: z.number(),
     fromAmount: z.number(),
     toAmount: z.number(),
+    toUser: z.number(),
     paidAt: dateTimeDtoSchema.default('2020-01-01'),
   })
   .required();

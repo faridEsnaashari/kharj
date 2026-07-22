@@ -21,4 +21,5 @@ export enum PaymentCategory {
   BANK = 'BANK',
   DATE = 'DATE',
   GIFT = 'GIFT',
+  HEALTH = 'HEALTH',
 }

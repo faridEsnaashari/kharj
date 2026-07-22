@@ -170,7 +170,7 @@ export class CommonRepository<
     const result = await this.findOne(conditions, raw);
 
     if (!result) {
-      throw new NotFoundException('user not found');
+      throw new NotFoundException('not found');
     }
 
     return result;
