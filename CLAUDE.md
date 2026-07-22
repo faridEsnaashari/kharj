@@ -12,6 +12,11 @@ debts automatically. The name "خرج" means "expense" in Persian.
 
 - **Apply changes directly to the files — do not commit.** Make the edits in the working
   tree and stop there. Only run `git commit` (or push) when explicitly asked to.
+  **Confirm the full absolute working directory (e.g. `pwd`) before creating or referencing
+  a file, on every prompt — don't assume it from earlier in the conversation.** There are
+  two near-identical workspaces on disk (`projects/kharj/` and `projects/kharj2/`), each
+  containing its own `kharj/` (backend) and `kharjf/` (frontend) — it's easy to silently
+  write into the wrong one.
 - **Database access for testing/development:** if you need to hit the database for
   testing or local development, use the `STAGE_...` variables from `.env`
   (`STAGE_MYSQL_HOST`, `STAGE_MYSQL_PORT`, `STAGE_MYSQL_USERNAME`,
@@ -414,38 +419,38 @@ Raw bank data (SMS text or xlsx file) is parsed into `UncompletePayment` records
 
 ### API Reference
 
-| Method | Route                          | Description                                                |
-| ------ | ------------------------------ | ---------------------------------------------------------- |
-| POST   | `/auth/signin`                 | Sign in, returns token                                     |
-| GET    | `/user/related-user`           | Get related users                                          |
-| GET    | `/bank`                        | List banks (general + own)                                 |
-| GET    | `/bank/:id`                    | Get one bank                                               |
-| POST   | `/bank`                        | Create user bank                                           |
-| PUT    | `/bank/:id`                    | Update own bank                                            |
-| DELETE | `/bank/:id`                    | Delete own bank (if unused)                                |
-| GET    | `/unit`                        | List units (general + own)                                 |
-| GET    | `/unit/:id`                    | Get one unit                                               |
-| POST   | `/unit`                        | Create user unit                                           |
-| PUT    | `/unit/:id`                    | Update own unit                                            |
-| DELETE | `/unit/:id`                    | Delete own unit (if unused)                                |
-| GET    | `/account`                     | List accounts (filters: ownedBy, bankId, unitId)           |
-| GET    | `/account/statistic`           | Balance totals grouped by unit                             |
-| GET    | `/account/:id`                 | Get one account with owner/bank/unit info                  |
-| POST   | `/account`                     | Create account                                             |
-| GET    | `/payment`                     | List payments (filters: bankId, unitId, ownedBy, category) |
-| POST   | `/payment`                     | Create payment (runs allocation logic)                     |
-| PUT    | `/payment/:id`                 | Update payment (reverses + re-applies)                     |
-| GET    | `/income`                      | List incomes (filters: bankId, unitId, ownedBy, category)  |
-| GET    | `/income/:id`                  | Get one income                                             |
-| POST   | `/income`                      | Create income                                              |
-| PUT    | `/income/:id`                  | Update income (reverses + re-applies)                      |
+| Method | Route                          | Description                                                                                     |
+| ------ | ------------------------------ | ----------------------------------------------------------------------------------------------- |
+| POST   | `/auth/signin`                 | Sign in, returns token                                                                          |
+| GET    | `/user/related-user`           | Get related users                                                                               |
+| GET    | `/bank`                        | List banks (general + own)                                                                      |
+| GET    | `/bank/:id`                    | Get one bank                                                                                    |
+| POST   | `/bank`                        | Create user bank                                                                                |
+| PUT    | `/bank/:id`                    | Update own bank                                                                                 |
+| DELETE | `/bank/:id`                    | Delete own bank (if unused)                                                                     |
+| GET    | `/unit`                        | List units (general + own)                                                                      |
+| GET    | `/unit/:id`                    | Get one unit                                                                                    |
+| POST   | `/unit`                        | Create user unit                                                                                |
+| PUT    | `/unit/:id`                    | Update own unit                                                                                 |
+| DELETE | `/unit/:id`                    | Delete own unit (if unused)                                                                     |
+| GET    | `/account`                     | List accounts (filters: ownedBy, bankId, unitId)                                                |
+| GET    | `/account/statistic`           | Balance totals grouped by unit                                                                  |
+| GET    | `/account/:id`                 | Get one account with owner/bank/unit info                                                       |
+| POST   | `/account`                     | Create account                                                                                  |
+| GET    | `/payment`                     | List payments (filters: bankId, unitId, ownedBy, category)                                      |
+| POST   | `/payment`                     | Create payment (runs allocation logic)                                                          |
+| PUT    | `/payment/:id`                 | Update payment (reverses + re-applies)                                                          |
+| GET    | `/income`                      | List incomes (filters: bankId, unitId, ownedBy, category)                                       |
+| GET    | `/income/:id`                  | Get one income                                                                                  |
+| POST   | `/income`                      | Create income                                                                                   |
+| PUT    | `/income/:id`                  | Update income (reverses + re-applies)                                                           |
 | POST   | `/exchange`                    | Transfer between accounts (destination can be managed by a different related user via `toUser`) |
-| GET    | `/debt`                        | List debts (filters: fromUserId, toUserId, bankId, unitId) |
-| GET    | `/transaction/recent-activity` | Merged payment+income feed                                 |
-| GET    | `/uncomplete-payment`          | List pending imports                                       |
-| POST   | `/uncomplete-payment/text`     | Parse SMS text                                             |
-| POST   | `/upload/bank-export`          | Upload xlsx statement                                      |
-| DELETE | `/uncomplete-payment/:id`      | Delete pending import                                      |
+| GET    | `/debt`                        | List debts (filters: fromUserId, toUserId, bankId, unitId)                                      |
+| GET    | `/transaction/recent-activity` | Merged payment+income feed                                                                      |
+| GET    | `/uncomplete-payment`          | List pending imports                                                                            |
+| POST   | `/uncomplete-payment/text`     | Parse SMS text                                                                                  |
+| POST   | `/upload/bank-export`          | Upload xlsx statement                                                                           |
+| DELETE | `/uncomplete-payment/:id`      | Delete pending import                                                                           |
 
 ### Testing
 
@@ -614,7 +619,13 @@ from App.jsx — the "Create One Instead" / "Log In Instead" buttons.
 hand-roll a button, input, or card in a feature folder.
 
 ```javascript
-import { Button, Input, DateField, Card, Amount } from '../../shared/components';
+import {
+    Button,
+    Input,
+    DateField,
+    Card,
+    Amount,
+} from '../../shared/components';
 ```
 
 `src/shared/styles/components.css` is imported once in `src/main.jsx`; individual
@@ -696,7 +707,7 @@ user sees. Calling `.format()` on a Jalali-bound dayjs instance emits Jalali dig
 misread as Gregorian. `src/shared/lib/date.js` collapses through the epoch timestamp
 to prevent this; any new date helper must do the same.
 
-`TimeField` *is* a native `<input type="time">` — time has no calendar dimension, so
+`TimeField` _is_ a native `<input type="time">` — time has no calendar dimension, so
 the OS picker is the right control there.
 
 ### UI Design System
