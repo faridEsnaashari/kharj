@@ -27,6 +27,7 @@ describe('ExchangeService', () => {
   const dto: CreateExchangeDto = {
     fromAccountId: 1,
     toAccountId: 2,
+    toUser: 2,
     fromAmount: 100,
     toAmount: 90,
     paidAt: '2024-01-01',
@@ -44,6 +45,27 @@ describe('ExchangeService', () => {
       incomeRepository as unknown as IncomeRepository,
       accountRepository as unknown as AccountRepository,
     );
+  });
+
+  it('looks up the destination account by toUser, not the caller', async () => {
+    accountRepository.findOne
+      .mockResolvedValueOnce({ id: 1, ballance: 500 })
+      .mockResolvedValueOnce({ id: 2, ballance: 200 });
+    accountRepository.updateOneById.mockResolvedValue(undefined);
+    paymentRepository.create.mockResolvedValue({ id: 11 });
+    incomeRepository.create.mockResolvedValue({ id: 22 });
+    exchangeRepository.create.mockResolvedValue({ id: 33 });
+
+    await service.createExchange({ ...dto, toUser: 7 }, user);
+
+    expect(accountRepository.findOne).toHaveBeenNthCalledWith(1, {
+      id: dto.fromAccountId,
+      userId: user.id,
+    });
+    expect(accountRepository.findOne).toHaveBeenNthCalledWith(2, {
+      id: dto.toAccountId,
+      userId: 7,
+    });
   });
 
   it('throws NotFoundException when either account is missing', async () => {

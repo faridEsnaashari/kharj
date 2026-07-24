@@ -14,10 +14,16 @@ import { User } from 'src/user/entities/user.entity';
 import * as xlsxLogic from 'src/file/logics/xlsx.logic';
 import * as resalatTextLogic from './logics/resalat/convert-resalat-text.logic';
 import * as resalatXlsxLogic from './logics/resalat/convert-resalat-xlsx.logic';
+import * as pasargadTextLogic from './logics/pasargad/convert-pasargad-text.logic';
+import * as pasargadXlsxLogic from './logics/pasargad/convert-pasargad-xlsx.logic';
+import * as melyXlsxLogic from './logics/mely/convert-mely-xlsx.logic';
 
 jest.mock('src/file/logics/xlsx.logic');
 jest.mock('./logics/resalat/convert-resalat-text.logic');
 jest.mock('./logics/resalat/convert-resalat-xlsx.logic');
+jest.mock('./logics/pasargad/convert-pasargad-text.logic');
+jest.mock('./logics/pasargad/convert-pasargad-xlsx.logic');
+jest.mock('./logics/mely/convert-mely-xlsx.logic');
 
 describe('UncompletePaymentService', () => {
   let service: UncompletePaymentService;
@@ -107,6 +113,44 @@ describe('UncompletePaymentService', () => {
         { amount: 20, accountId: 1 },
       ]);
     });
+
+    it('parses via the Pasargad xlsx converter and bulk-creates with the account id attached', async () => {
+      accountRepository.findOne.mockResolvedValue({ id: 1 });
+      bankRepository.findOneByIdOrFail.mockResolvedValue({
+        id: 10,
+        symbol: 'PASARGAD',
+      });
+      (xlsxLogic.xlsxToJson as jest.Mock).mockReturnValue([{ a: 1 }]);
+      (pasargadXlsxLogic.convertPasargadXlsx as jest.Mock).mockReturnValue([
+        { amount: 30 },
+      ]);
+      uncompletePaymentRepository.bulkCreate.mockResolvedValue([]);
+
+      await service.uploadBandExport(dto, user);
+
+      expect(uncompletePaymentRepository.bulkCreate).toHaveBeenCalledWith([
+        { amount: 30, accountId: 1 },
+      ]);
+    });
+
+    it('parses via the Mely converter and bulk-creates with the account id attached', async () => {
+      accountRepository.findOne.mockResolvedValue({ id: 1 });
+      bankRepository.findOneByIdOrFail.mockResolvedValue({
+        id: 10,
+        symbol: 'MELY',
+      });
+      (xlsxLogic.xlsxToJson as jest.Mock).mockReturnValue([{ a: 1 }]);
+      (melyXlsxLogic.convertMelyXlsx as jest.Mock).mockReturnValue([
+        { amount: 40 },
+      ]);
+      uncompletePaymentRepository.bulkCreate.mockResolvedValue([]);
+
+      await service.uploadBandExport(dto, user);
+
+      expect(uncompletePaymentRepository.bulkCreate).toHaveBeenCalledWith([
+        { amount: 40, accountId: 1 },
+      ]);
+    });
   });
 
   describe('paymentText', () => {
@@ -158,6 +202,25 @@ describe('UncompletePaymentService', () => {
 
       expect(uncompletePaymentRepository.create).toHaveBeenCalledWith({
         amount: 15,
+        accountId: 1,
+      });
+    });
+
+    it('parses via the Pasargad converter and creates with the account id attached', async () => {
+      accountRepository.findOne.mockResolvedValue({ id: 1 });
+      bankRepository.findOneByIdOrFail.mockResolvedValue({
+        id: 10,
+        symbol: 'PASARGAD',
+      });
+      (pasargadTextLogic.convertPasargadText as jest.Mock).mockReturnValue({
+        amount: 25,
+      });
+      uncompletePaymentRepository.create.mockResolvedValue({ id: 1 });
+
+      await service.paymentText(dto, user);
+
+      expect(uncompletePaymentRepository.create).toHaveBeenCalledWith({
+        amount: 25,
         accountId: 1,
       });
     });
