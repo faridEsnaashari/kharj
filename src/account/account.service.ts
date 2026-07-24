@@ -15,7 +15,13 @@ import { UnitModel } from 'src/unit/entities/unit.entity';
 import { BankRepository } from 'src/bank/entities/repositories/bank.repository';
 import { BankModel } from 'src/bank/entities/bank.entity';
 import { Account } from './entities/account.entity';
-import { groupAccountsByUnit } from './logics/account.logic';
+import {
+  groupAccountsByUnit,
+  sumWeeklyPaymentIncomeByUnit,
+} from './logics/account.logic';
+import { PaymentRepository } from 'src/payment/entities/repositories/payment.repository';
+import { IncomeRepository } from 'src/income/entities/repositories/income.repository';
+import { date } from 'src/common/tools/date/date.tool';
 
 @Injectable()
 export class AccountService {
@@ -24,6 +30,8 @@ export class AccountService {
     private userRepository: UserRepository,
     private unitRepository: UnitRepository,
     private bankRepository: BankRepository,
+    private paymentRepository: PaymentRepository,
+    private incomeRepository: IncomeRepository,
   ) {}
 
   async findAllAccounts(query: GetAllAccountsDto, user: User) {
@@ -66,7 +74,7 @@ export class AccountService {
     });
   }
 
-  async getStatistic(query: GetAccountStatisticDto, user: User) {
+  async getGroupByUnit(query: GetAccountStatisticDto, user: User) {
     const where: WhereOptions<Account> = {
       userId: user.id,
       ...(query.unitId ? { unitId: query.unitId } : {}),
@@ -80,6 +88,29 @@ export class AccountService {
     });
 
     return groupAccountsByUnit(accounts);
+  }
+
+  async getWeeklyPaymentIncome(query: GetAccountStatisticDto, user: User) {
+    const where: WhereOptions<Account> = {
+      userId: user.id,
+      ...(query.unitId ? { unitId: query.unitId } : {}),
+    };
+
+    const accounts = await this.accountRepository.findAll({ where });
+
+    const accountIds = accounts.map((account) => account.id);
+    const weekAgo = date().subtract(7, 'day').format('YYYY-MM-DD HH:mm:ss');
+
+    const [payments, incomes] = await Promise.all([
+      this.paymentRepository.findAll({
+        where: { accountId: accountIds, paidAt: { [Op.gte]: weekAgo } },
+      }),
+      this.incomeRepository.findAll({
+        where: { accountId: accountIds, paidAt: { [Op.gte]: weekAgo } },
+      }),
+    ]);
+
+    return sumWeeklyPaymentIncomeByUnit(accounts, payments, incomes);
   }
 
   async createAccount(dto: CreateAccountDto, user: User) {

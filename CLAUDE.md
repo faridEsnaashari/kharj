@@ -307,10 +307,11 @@ All responses are wrapped by the response interceptor:
 { "success": true, "message": "OPERATION_DONE", "data": { ... } }
 ```
 
-Paginated responses:
+Paginated responses — the interceptor renames a returned `{ rows, count }` shape
+to `{ rows, paginationData: { total } }` on the wire:
 
 ```json
-{ "success": true, "message": "OPERATION_DONE", "data": { "rows": [...], "count": 100 } }
+{ "success": true, "message": "OPERATION_DONE", "data": { "rows": [...], "paginationData": { "total": 100 } } }
 ```
 
 ### Authentication
@@ -344,6 +345,30 @@ Paginated responses:
 5. **Services only** — orchestrate: call repositories, call logic functions, return results.
 6. **Use `PUT` for full updates** (all fields required), `PATCH` for partial.
 7. **File names in code blocks** — every filename must be in a code block for one-click copy.
+8. **Ternaries are for short, single expressions only.** A `cond ? a : b` picking
+   between two simple values is fine. Once a branch needs its own statements, or
+   several `cond ? a : b` entries pile up next to each other (e.g. building several
+   promises to run in `Promise.all`), switch to `if`/`else` blocks that assign to a
+   `let` instead — nested/stacked ternaries read fine to the person who just wrote
+   them and are a lot harder for anyone else (including future-you) to scan:
+    ```typescript
+    // ✅ — several independent branches, each preparing its own promise
+    let paymentsPromise: Promise<Payment[]> = Promise.resolve([]);
+    let paymentCountPromise: Promise<number> = Promise.resolve(0);
+
+    if (includePayments) {
+        paymentsPromise = this.paymentRepository.findAll({ where: { accountId } });
+        paymentCountPromise = this.paymentRepository.count({ accountId });
+    }
+
+    const [payments, paymentCount] = await Promise.all([paymentsPromise, paymentCountPromise]);
+
+    // ❌ — same logic, but as a wall of stacked ternaries
+    const [payments, paymentCount] = await Promise.all([
+        includePayments ? this.paymentRepository.findAll({ where: { accountId } }) : Promise.resolve([]),
+        includePayments ? this.paymentRepository.count({ accountId }) : Promise.resolve(0),
+    ]);
+    ```
 
 ### Key Business Logic
 
@@ -415,7 +440,34 @@ Raw bank data (SMS text or xlsx file) is parsed into `UncompletePayment` records
 
 #### Recent Activity (Transactions)
 
-`GET /transaction/recent-activity` merges payments and incomes from all of the user's accounts, sorted by `paidAt` DESC. Since two tables are merged, pagination is done manually: fetch `page * size` from each source, merge+sort, then slice the requested page.
+`GET /transaction/recent-activity` merges payments and incomes from all of the user's accounts, sorted by `paidAt` DESC. Since two tables are merged, pagination is done manually: fetch `page * size` from each source, merge+sort, then slice the requested page. An optional `type` query param (`PAYMENT` | `INCOME`) restricts the feed to one source — the other repository is skipped entirely (no query, count resolves to `0`) rather than fetched and discarded.
+
+#### Account Statistic (Home Page Unit Cards)
+
+Two independent endpoints back the home page unit cards — kept separate rather
+than one combined response, so a caller that only needs balances doesn't pay
+for the weekly Payment/Income queries:
+
+- `GET /account/static/group-by-unit` — balances only. Groups the user's
+  accounts by unit (`AccountStatisticItem[]`: `unitId, unit, total,
+  accountCount`), sorted by `total` descending. There is no server-side
+  "top N units" concept — a `Unit` has no ordering field of its own
+  (`Account.priority` is unrelated, it only orders payment allocation) — so a
+  "top 5" home page just takes the first 5 of this already-sorted-by-balance
+  array.
+- `GET /account/static/weekly-payment-income` — `AccountWeeklyStatisticItem[]`:
+  `unitId, weeklyIncome, weeklyPayment`, summing that unit's `Income`/`Payment`
+  rows with `paidAt` in the last 7 days (`AccountService` also injects
+  `PaymentRepository`/`IncomeRepository` for this, same cross-module pattern as
+  `ExchangeService`). Every unit the user has an account in is present even
+  with zero activity, so a caller can merge this with `group-by-unit` by
+  `unitId` without needing a default-fill step for missing units.
+
+Both accept the same optional `unitId` filter
+(`GetAccountStatisticDto`/`getAccountStatisticDtoSchema`, shared between them).
+The frontend (`features/dashboard/hooks/useDashboard.js`) calls both in
+parallel and merges them client-side into the combined shape `UnitCard`
+renders.
 
 ### API Reference
 
@@ -434,7 +486,8 @@ Raw bank data (SMS text or xlsx file) is parsed into `UncompletePayment` records
 | PUT    | `/unit/:id`                    | Update own unit                                                                                 |
 | DELETE | `/unit/:id`                    | Delete own unit (if unused)                                                                     |
 | GET    | `/account`                     | List accounts (filters: ownedBy, bankId, unitId)                                                |
-| GET    | `/account/statistic`           | Balance totals grouped by unit                                                                  |
+| GET    | `/account/static/group-by-unit`       | Balance totals grouped by unit, sorted by balance desc                                    |
+| GET    | `/account/static/weekly-payment-income` | Weekly income/payment totals grouped by unit (last 7 days)                              |
 | GET    | `/account/:id`                 | Get one account with owner/bank/unit info                                                       |
 | POST   | `/account`                     | Create account                                                                                  |
 | GET    | `/payment`                     | List payments (filters: bankId, unitId, ownedBy, category)                                      |
@@ -446,7 +499,7 @@ Raw bank data (SMS text or xlsx file) is parsed into `UncompletePayment` records
 | PUT    | `/income/:id`                  | Update income (reverses + re-applies)                                                           |
 | POST   | `/exchange`                    | Transfer between accounts (destination can be managed by a different related user via `toUser`) |
 | GET    | `/debt`                        | List debts (filters: fromUserId, toUserId, bankId, unitId)                                      |
-| GET    | `/transaction/recent-activity` | Merged payment+income feed                                                                      |
+| GET    | `/transaction/recent-activity` | Merged payment+income feed (filter: `type` = `PAYMENT`\|`INCOME`)                                |
 | GET    | `/uncomplete-payment`          | List pending imports                                                                            |
 | POST   | `/uncomplete-payment/text`     | Parse SMS text                                                                                  |
 | POST   | `/upload/bank-export`          | Upload xlsx statement                                                                           |
@@ -572,6 +625,24 @@ src/
 │   │       └── auth.css            page scaffold only — all values reference tokens.css;
 │   │                               controls come from shared/components
 │   ├── dashboard/
+│   │   ├── Dashboard.jsx           home page content only — no header/back-button/bottom-nav
+│   │   │                           (that page template is built later); mounted directly by
+│   │   │                           App.jsx's AUTHENTICATED branch
+│   │   ├── index.js
+│   │   ├── api/
+│   │   │   └── dashboard.api.js    getAccountGroupByUnit(), getAccountWeeklyPaymentIncome(),
+│   │   │                           getRecentActivity({ type, page, size })
+│   │   ├── hooks/
+│   │   │   └── useDashboard.js     fetches both; owns the activity type filter state
+│   │   ├── components/
+│   │   │   ├── UnitCard.jsx        balance + weekly income/payment for one unit
+│   │   │   ├── ActionButtons.jsx   Pay / Income / Excel Import / Exchange tiles — handlers are
+│   │   │   │                       optional no-op-defaulted props; real navigation to those
+│   │   │   │                       screens isn't wired up yet (none of them exist)
+│   │   │   └── RecentActivityList.jsx  All/Income/Pay `ChipGroup` filter + activity `List`
+│   │   └── styles/
+│   │       └── dashboard.css       horizontally-scrollable unit-card row (touch carousel,
+│   │                               same pattern as the mockup's "Your Accounts" section)
 │   ├── accounts/
 │   ├── payments/
 │   ├── inbox/

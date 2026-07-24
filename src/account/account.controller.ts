@@ -40,13 +40,22 @@ export class AccountController {
     return this.accountService.findAllAccounts(query, req.user);
   }
 
-  @Get('statistic')
+  @Get('static/group-by-unit')
   @UsePipes(new ZodValidationPipe(getAccountStatisticDtoSchema))
-  async getStatistic(
+  async getGroupByUnit(
     @Req() req: { user: User },
     @Query() query: GetAccountStatisticDto,
   ) {
-    return this.accountService.getStatistic(query, req.user);
+    return this.accountService.getGroupByUnit(query, req.user);
+  }
+
+  @Get('static/weekly-payment-income')
+  @UsePipes(new ZodValidationPipe(getAccountStatisticDtoSchema))
+  async getWeeklyPaymentIncome(
+    @Req() req: { user: User },
+    @Query() query: GetAccountStatisticDto,
+  ) {
+    return this.accountService.getWeeklyPaymentIncome(query, req.user);
   }
 
   @Get(':id')

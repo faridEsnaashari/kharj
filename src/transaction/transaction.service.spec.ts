@@ -99,4 +99,27 @@ describe('TransactionService', () => {
     });
     expect(incomeRepository.count).toHaveBeenCalledWith({ accountId: [1, 2] });
   });
+
+  it('only queries payments when type is PAYMENT', async () => {
+    const query = { page: 1, size: 20, type: 'PAYMENT' } as GetRecentActivityDto;
+
+    const result = await service.getRecentActivity(query, user);
+
+    expect(paymentRepository.findAll).toHaveBeenCalled();
+    expect(paymentRepository.count).toHaveBeenCalled();
+    expect(incomeRepository.findAll).not.toHaveBeenCalled();
+    expect(incomeRepository.count).not.toHaveBeenCalled();
+    expect(result.count).toBe(0);
+  });
+
+  it('only queries incomes when type is INCOME', async () => {
+    const query = { page: 1, size: 20, type: 'INCOME' } as GetRecentActivityDto;
+
+    await service.getRecentActivity(query, user);
+
+    expect(incomeRepository.findAll).toHaveBeenCalled();
+    expect(incomeRepository.count).toHaveBeenCalled();
+    expect(paymentRepository.findAll).not.toHaveBeenCalled();
+    expect(paymentRepository.count).not.toHaveBeenCalled();
+  });
 });

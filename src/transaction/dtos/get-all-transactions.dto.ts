@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { TransactionType } from '../enums/transaction-type.enum';
 
 export const getRecentActivityDtoSchema = z.object({
   page: z
@@ -11,6 +12,7 @@ export const getRecentActivityDtoSchema = z.object({
     .optional()
     .default('20')
     .transform((v) => +v),
+  type: z.nativeEnum(TransactionType).optional(),
 });
 
 export type GetRecentActivityDto = z.infer<typeof getRecentActivityDtoSchema>;

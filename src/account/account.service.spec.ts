@@ -4,6 +4,8 @@ import { AccountRepository } from './entities/repositories/account.repository';
 import { UserRepository } from 'src/user/entities/repositories/user.repository';
 import { UnitRepository } from 'src/unit/entities/repositories/unit.repository';
 import { BankRepository } from 'src/bank/entities/repositories/bank.repository';
+import { PaymentRepository } from 'src/payment/entities/repositories/payment.repository';
+import { IncomeRepository } from 'src/income/entities/repositories/income.repository';
 import {
   createMockRepository,
   MockRepository,
@@ -19,6 +21,8 @@ describe('AccountService', () => {
   let userRepository: MockRepository;
   let unitRepository: MockRepository;
   let bankRepository: MockRepository;
+  let paymentRepository: MockRepository;
+  let incomeRepository: MockRepository;
   const user = { id: 1 } as User;
 
   const dto: CreateAccountDto = {
@@ -34,12 +38,16 @@ describe('AccountService', () => {
     userRepository = createMockRepository();
     unitRepository = createMockRepository();
     bankRepository = createMockRepository();
+    paymentRepository = createMockRepository();
+    incomeRepository = createMockRepository();
 
     service = new AccountService(
       accountRepository as unknown as AccountRepository,
       userRepository as unknown as UserRepository,
       unitRepository as unknown as UnitRepository,
       bankRepository as unknown as BankRepository,
+      paymentRepository as unknown as PaymentRepository,
+      incomeRepository as unknown as IncomeRepository,
     );
 
     userRepository.findOneByIdOrFail.mockResolvedValue({ id: 1 });
@@ -48,6 +56,8 @@ describe('AccountService', () => {
     accountRepository.findOne.mockResolvedValue(null);
     accountRepository.create.mockResolvedValue({ id: 100 });
     accountRepository.pagination.mockResolvedValue({ rows: [], count: 0 });
+    paymentRepository.findAll.mockResolvedValue([]);
+    incomeRepository.findAll.mockResolvedValue([]);
   });
 
   it('throws NotFoundException when the unit is not accessible to the user', async () => {
@@ -122,18 +132,18 @@ describe('AccountService', () => {
     );
   });
 
-  it('getStatistic groups the user accounts by unit', async () => {
+  it('getGroupByUnit groups the user accounts by unit', async () => {
     const unit20 = { id: 20 };
     const unit30 = { id: 30 };
     accountRepository.findAll.mockResolvedValue([
-      { unitId: 20, unit: unit20, ballance: 100 },
-      { unitId: 20, unit: unit20, ballance: 50 },
-      { unitId: 30, unit: unit30, ballance: 7 },
+      { id: 1, unitId: 20, unit: unit20, ballance: 100 },
+      { id: 2, unitId: 20, unit: unit20, ballance: 50 },
+      { id: 3, unitId: 30, unit: unit30, ballance: 7 },
     ]);
 
     const query = {} as GetAccountStatisticDto;
 
-    const result = await service.getStatistic(query, user);
+    const result = await service.getGroupByUnit(query, user);
 
     expect(accountRepository.findAll).toHaveBeenCalledWith(
       expect.objectContaining({ where: { userId: 1 } }),
@@ -142,14 +152,55 @@ describe('AccountService', () => {
       { unitId: 20, unit: unit20, total: 150, accountCount: 2 },
       { unitId: 30, unit: unit30, total: 7, accountCount: 1 },
     ]);
+    expect(paymentRepository.findAll).not.toHaveBeenCalled();
+    expect(incomeRepository.findAll).not.toHaveBeenCalled();
   });
 
-  it('getStatistic narrows to one unit when unitId is provided', async () => {
+  it('getGroupByUnit narrows to one unit when unitId is provided', async () => {
     accountRepository.findAll.mockResolvedValue([]);
 
     const query = { unitId: 20 } as GetAccountStatisticDto;
 
-    await service.getStatistic(query, user);
+    await service.getGroupByUnit(query, user);
+
+    expect(accountRepository.findAll).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { userId: 1, unitId: 20 } }),
+    );
+  });
+
+  it('getWeeklyPaymentIncome sums payments and incomes from the last 7 days per unit', async () => {
+    accountRepository.findAll.mockResolvedValue([
+      { id: 1, unitId: 20, ballance: 100 },
+    ]);
+    paymentRepository.findAll.mockResolvedValue([{ accountId: 1, amount: 30 }]);
+    incomeRepository.findAll.mockResolvedValue([{ accountId: 1, amount: 45 }]);
+
+    const query = {} as GetAccountStatisticDto;
+
+    const result = await service.getWeeklyPaymentIncome(query, user);
+
+    expect(accountRepository.findAll).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { userId: 1 } }),
+    );
+    expect(paymentRepository.findAll).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ accountId: [1] }),
+      }),
+    );
+    expect(incomeRepository.findAll).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ accountId: [1] }),
+      }),
+    );
+    expect(result).toEqual([{ unitId: 20, weeklyIncome: 45, weeklyPayment: 30 }]);
+  });
+
+  it('getWeeklyPaymentIncome narrows to one unit when unitId is provided', async () => {
+    accountRepository.findAll.mockResolvedValue([]);
+
+    const query = { unitId: 20 } as GetAccountStatisticDto;
+
+    await service.getWeeklyPaymentIncome(query, user);
 
     expect(accountRepository.findAll).toHaveBeenCalledWith(
       expect.objectContaining({ where: { userId: 1, unitId: 20 } }),
