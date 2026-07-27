@@ -12,6 +12,10 @@ import { UploadPaymentDto } from './dtos/upload-payment.dto';
 import path from 'path';
 import { xlsxToJson } from 'src/file/logics/xlsx.logic';
 import { BankProvider } from 'src/bank/enums/bank-provider.enum';
+import { BankModel } from 'src/bank/entities/bank.entity';
+import { UnitModel } from 'src/unit/entities/unit.entity';
+import { AccountModel } from 'src/account/entities/account.entity';
+import { UserModel } from 'src/user/entities/user.entity';
 import { UncompletePaymentRepository } from './entities/repositories/uncomplete-payment.repository';
 import {
   CreateUncompletePayment,
@@ -119,6 +123,28 @@ export class UncompletePaymentService {
           {
             model: IncomeModel,
             as: 'income',
+          },
+          {
+            model: AccountModel,
+            as: 'account',
+            attributes: ['id', 'ownedBy', 'bankId', 'unitId'],
+            include: [
+              {
+                model: BankModel,
+                as: 'bank',
+                attributes: ['id', 'name', 'symbol'],
+              },
+              {
+                model: UnitModel,
+                as: 'unit',
+                attributes: ['id', 'name', 'symbol'],
+              },
+              {
+                model: UserModel,
+                as: 'owner',
+                attributes: ['id', 'name'],
+              },
+            ],
           },
         ],
         order: [['paidAt', 'ASC']],

@@ -25,6 +25,39 @@ debts automatically. The name "خرج" means "expense" in Persian.
   `src/common/ports/database/sequelize-cli.config.ts` (used whenever
   `appConfigs.nodeEnv === 'develop'`) already reads from `STAGE_MYSQL_*`; the plain
   `MYSQL_*` variables back `production` and point at the real database.
+- **Never kill a server you didn't start yourself** — the user may have their own
+  backend/frontend running (default ports `3006`/`5173`) for their own work; killing it
+  out from under them is disruptive and not yours to decide. If a default port is
+  already taken, that is a signal it's probably the user's, not an obstacle to clear.
+- **Run your own verification servers on different ports, and shut them down when
+  done.** When you need to launch the backend or frontend to verify a change:
+  - Backend: override the port, e.g. `APP_PORT=4006 npm run start:dev`.
+  - Frontend: override both its own port and the backend URL it talks to, e.g.
+    `VITE_API_URL=http://localhost:4006 npm run dev -- --port 4173`.
+  - Kill only the PID(s) you started — note them when you launch, don't rediscover
+    "whatever is on the port" later, since by then it may include the user's own
+    server if you picked a port that collides.
+  - **Killing only the port's listener PID is not enough for `nest start --watch`**:
+    it's a supervisor process that immediately respawns a new child the moment the
+    old one dies, so `lsof -ti:<port> | xargs kill` alone leaves it running under a
+    new PID. Kill the actual `nest start --watch` process (its parent), e.g.:
+    ```bash
+    lsof -nP -iTCP:<port> -sTCP:LISTEN   # find the PID and its parent (ps -o ppid= -p <pid>)
+    kill <watch-mode-parent-pid>         # then confirm the port is actually free
+    ```
+    Verify with `lsof` afterward — don't assume the `kill` worked.
+- **Do not add comments to code — backend or frontend.** No doc comments, no inline
+  explanations, no "why" notes left in the file. If something needs explaining, say it in
+  the chat response, not in the source. This applies to every file, not just ones written
+  from scratch — don't add a comment to an existing file you're editing either.
+- **Never run database migrations or CLI commands yourself** (`sequelize-cli db:migrate`,
+  `npm run commander <cmd>`, or anything else that changes schema or mutates stored
+  data) — not even against the STAGE database. Write the migration/command file,
+  verify it builds/compiles, and stop there; the user runs it themselves when they're
+  ready. This is stricter than the general STAGE-DB-for-testing rule above: read-only
+  queries and starting the app against STAGE are fine, but anything that alters
+  structure or rewrites existing rows is the user's call to execute, not yours —
+  they may want to review the exact change first, back up data, or time it deliberately.
 
 ---
 
@@ -378,13 +411,33 @@ Both banks and units follow the same pattern:
 
 - **General** (`userId = null`) — seeded in DB, available to all users, not editable via API
 - **User-defined** (`userId = <id>`) — created by the user, editable, deletable (if unused)
-- `GET /bank` and `GET /unit` always return both merged for the requesting user
+- `GET /bank` and `GET /unit` always return both merged for the requesting user (or, with
+  `?userId=<id>`, merged for a related user's own book instead — see
+  `UserService.resolveTargetUserId` below)
 
 #### Accounts and Shared Ownership
 
 - Each account belongs to a `userId` (the managing user) and has an `ownedBy` (the owner of that share)
 - A single bank+unit combination can have multiple accounts with different `ownedBy` values — this is how shared ownership is modelled
 - `priority` determines which account/share is drawn from first during a payment
+
+#### Cross-Book Lookups (`UserService.resolveTargetUserId`)
+
+`GET /account`, `GET /bank` and `GET /unit` all accept an optional `?userId=<id>` filter that
+looks up that data in a *related* user's own book instead of the caller's. Each service
+(`AccountService.findAllAccounts`, `BankService.findAllBanks`, `UnitService.findAllUnits`) resolves
+it through the shared `UserService.resolveTargetUserId(requestedUserId, user)`:
+
+- No `userId`, or `userId === user.id` → returns `user.id` (the normal, single-user case), no DB lookup.
+- Any other `userId` → looked up in `user_relations` (`{ userId: user.id, relatedTo: userId }`); if
+  no such relation exists, throws `ForbiddenException('user-not-related')` — this is what stops the
+  filter from leaking an arbitrary user's account/bank/unit data.
+
+This exists for Exchange's destination side (`CreateExchangeDto.toUser` — see below): the frontend's
+Exchange page needs to resolve a destination account balance, and the bank/unit it uses, in a
+different related user's book *before* submitting, not just accept an opaque id blindly. `UserService`
+is exported from the `@Global()` `UserModule`, so any service can inject it directly without its
+module needing to import `UserModule`.
 
 #### Payment Allocation Logic (`payment.logic.ts`)
 
@@ -430,7 +483,11 @@ side and an `Income` (category `EXCHANGE`) on the destination side.
 
 #### UncompletePayments
 
-Raw bank data (SMS text or xlsx file) is parsed into `UncompletePayment` records. The user then reviews and converts them into real `Payment` or `Income` records. Parser dispatch happens inline in `uncomplete-payment.service.ts` (`paymentText` / `uploadBandExport`) by branching on the `Bank` enum (`src/account/enums/bank.enum.ts`) — currently `RESALAT` and `PASARGAD` are wired for both, `MELY` for xlsx upload.
+Raw bank data (SMS text or xlsx file) is parsed into `UncompletePayment` records. The user then reviews and converts them into real `Payment` or `Income` records. Parser dispatch happens inline in `uncomplete-payment.service.ts` (`paymentText` / `uploadBandExport`) by branching on the bank's `symbol` (`BankProvider` enum, `src/bank/enums/bank-provider.enum.ts`) — currently `RESALAT` and `PASARGAD` are wired for both, `MELY` for xlsx upload.
+
+xlsx upload is two calls: `POST /file/upload/bank-payment` (multipart, field name `file`) saves the file under `./uploads/bank-upload/` and returns its generated filename; that filename is then passed as `uploadedFile` to `POST /uncomplete-payments/upload/bank-export` (with `bankId`), which reads the file back off disk and parses it. There's no single combined upload+parse endpoint.
+
+`GET /uncomplete-payments` includes each row's `account` (with nested `bank`/`unit`/`owner`) — `bank`/`unit` are needed for `PAYMENT`-type rows, since converting one calls `POST /payment` which wants `bankId`/`unitId`/`ownerId`, not `accountId`; `INCOME`-type rows already carry `accountId` directly and don't strictly need them, but they're included for both so the frontend can render "which account" uniformly. `owner` (just `id`/`name`) is included so the frontend can show whose account a pending row belongs to. Converting a pending row into a real transaction isn't a dedicated endpoint — the frontend just calls the ordinary `POST /payment` or `POST /income` (chosen by the row's `type`) with `uncompletePaymentId` set to the row's id; `GET /uncomplete-payments`' own query already excludes any row with a linked `payment`/`income` (`$payment.uncomplete_payment_id$ IS NULL AND $income.uncomplete_payment_id$ IS NULL`), so a converted row simply stops appearing — no separate "mark resolved" step.
 
 - **RESALAT** text: 4-line SMS (`account\namount±\nMM/DD_HH:mm\nمانده: remain`), Jalali month/day assumed current Jalali year.
   xlsx: positional `__EMPTY_N` columns (Excel export has no header names), sign of `__EMPTY_8` distinguishes payment/income.
@@ -440,7 +497,7 @@ Raw bank data (SMS text or xlsx file) is parsed into `UncompletePayment` records
 
 #### Recent Activity (Transactions)
 
-`GET /transaction/recent-activity` merges payments and incomes from all of the user's accounts, sorted by `paidAt` DESC. Since two tables are merged, pagination is done manually: fetch `page * size` from each source, merge+sort, then slice the requested page. An optional `type` query param (`PAYMENT` | `INCOME`) restricts the feed to one source — the other repository is skipped entirely (no query, count resolves to `0`) rather than fetched and discarded.
+`GET /transaction/recent-activity` merges payments and incomes from all of the user's accounts, sorted by `paidAt` DESC. Since two tables are merged, pagination is done manually: fetch `page * size` from each source, merge+sort, then slice the requested page. An optional `type` query param (`PAYMENT` | `INCOME`) restricts the feed to one source — the other repository is skipped entirely (no query, count resolves to `0`) rather than fetched and discarded. Optional `bankId`/`unitId`/`ownedBy` params narrow the underlying account lookup (same `accountWhere` pattern `PaymentService.getAllPayments` already uses) — this is what lets the frontend Payment page's activity list progressively narrow as the user picks a bank/unit in the create-payment form above it, and what lets the Account Details page (`bankId`+`unitId`+`ownedBy` together identify exactly one account) show only that one account's history instead of every account sharing its bank+unit.
 
 #### Account Statistic (Home Page Unit Cards)
 
@@ -475,17 +532,17 @@ renders.
 | ------ | ------------------------------ | ----------------------------------------------------------------------------------------------- |
 | POST   | `/auth/signin`                 | Sign in, returns token                                                                          |
 | GET    | `/user/related-user`           | Get related users                                                                               |
-| GET    | `/bank`                        | List banks (general + own)                                                                      |
+| GET    | `/bank`                        | List banks (general + own, or a related user's own book via `userId`)                           |
 | GET    | `/bank/:id`                    | Get one bank                                                                                    |
 | POST   | `/bank`                        | Create user bank                                                                                |
 | PUT    | `/bank/:id`                    | Update own bank                                                                                 |
 | DELETE | `/bank/:id`                    | Delete own bank (if unused)                                                                     |
-| GET    | `/unit`                        | List units (general + own)                                                                      |
+| GET    | `/unit`                        | List units (general + own, or a related user's own book via `userId`)                           |
 | GET    | `/unit/:id`                    | Get one unit                                                                                    |
 | POST   | `/unit`                        | Create user unit                                                                                |
 | PUT    | `/unit/:id`                    | Update own unit                                                                                 |
 | DELETE | `/unit/:id`                    | Delete own unit (if unused)                                                                     |
-| GET    | `/account`                     | List accounts (filters: ownedBy, bankId, unitId)                                                |
+| GET    | `/account`                     | List accounts (filters: ownedBy, bankId, unitId, userId — see Cross-Book Lookups)                |
 | GET    | `/account/static/group-by-unit`       | Balance totals grouped by unit, sorted by balance desc                                    |
 | GET    | `/account/static/weekly-payment-income` | Weekly income/payment totals grouped by unit (last 7 days)                              |
 | GET    | `/account/:id`                 | Get one account with owner/bank/unit info                                                       |
@@ -499,11 +556,12 @@ renders.
 | PUT    | `/income/:id`                  | Update income (reverses + re-applies)                                                           |
 | POST   | `/exchange`                    | Transfer between accounts (destination can be managed by a different related user via `toUser`) |
 | GET    | `/debt`                        | List debts (filters: fromUserId, toUserId, bankId, unitId)                                      |
-| GET    | `/transaction/recent-activity` | Merged payment+income feed (filter: `type` = `PAYMENT`\|`INCOME`)                                |
-| GET    | `/uncomplete-payment`          | List pending imports                                                                            |
-| POST   | `/uncomplete-payment/text`     | Parse SMS text                                                                                  |
-| POST   | `/upload/bank-export`          | Upload xlsx statement                                                                           |
-| DELETE | `/uncomplete-payment/:id`      | Delete pending import                                                                           |
+| GET    | `/transaction/recent-activity` | Merged payment+income feed (filters: `type` = `PAYMENT`\|`INCOME`, `bankId`, `unitId`, `ownedBy`) |
+| GET    | `/uncomplete-payments`         | List pending imports (filters: bankId), includes account/bank/unit                              |
+| POST   | `/uncomplete-payments/text`    | Parse SMS text into a pending import                                                             |
+| POST   | `/uncomplete-payments/upload/bank-export` | Parse an already-uploaded xlsx file (`uploadedFile`) into pending imports              |
+| POST   | `/file/upload/bank-payment`    | Upload the raw xlsx file (multipart, field `file`), returns the saved filename                  |
+| DELETE | `/uncomplete-payments/:id`     | Delete a pending import                                                                          |
 
 ### Testing
 
@@ -579,7 +637,72 @@ established structure over retrofitting what is already there.
   All data comes from the backend API over HTTP.
 - **Language:** JavaScript (JSX)
 - **HTTP:** Axios (configured in `src/features/auth/api/api.config.js`)
+- **Routing:** `react-router-dom` (authenticated pages only — see Routing &
+  Navigation below)
 - **Styling:** CSS modules per feature (`auth.css`)
+
+### Routing & Navigation
+
+Auth screens (`Signin`/`Signup`) are **not** routed — `App.jsx` still gates
+them with the original `AUTH_STATES` `useState` machine, unchanged. Once
+`AUTH_STATES.AUTHENTICATED`, `App.jsx` mounts a `<BrowserRouter>` wrapping a
+small local `AuthenticatedShell` (defined inline in `App.jsx`, not its own
+file) that renders:
+
+- the temporary logout bar (unchanged, still a stand-in for the real
+  header/profile screen),
+- `<Routes>` inside `<div className="app-content">` — `/` → `Dashboard`,
+  `/payment` → `Payment`, `/income` → `Income`, `/exchange` → `Exchange`,
+  `/inbox` → `Inbox`, `/accounts` → `Accounts`, `*` → redirect to `/` — there
+  is no `/accounts/:id` route: opening one account is a modal
+  (`AccountDetailsModal`) over the list, not a navigation, so it never needed
+  its own URL,
+- `<BottomNav tabs={NAV_TABS} />` — the persistent tab bar, shown on every
+  authenticated page.
+
+**Adding a new page**: add a `<Route>` in `AuthenticatedShell`; a page
+existing doesn't automatically mean it belongs in `NAV_TABS` too — `Inbox` and
+`Accounts` are each reached only via a dashboard action tile (Excel Import /
+Accounts), not their own tab (no Visly mockup screen puts either in a
+top-level nav). Add a `NAV_TABS` entry (also in `App.jsx`) — `{ key, label,
+icon, path }` — only when actually asked for one; that's the whole
+integration, `BottomNav` (`shared/components/BottomNav.jsx`) is generic and
+needs no changes per tab.
+`NAV_TABS` currently has Home, Payment, Income and Exchange;
+Accounts/Debts/Profile get added the same way once those pages exist — don't
+add placeholder tabs for pages that don't exist yet.
+
+`.app-content`'s bottom padding (`src/App.css`, `--bottom-nav-height` token in
+`tokens.css`) is the one place fixed-nav clearance is handled — a page's own
+CSS doesn't need to account for the nav bar.
+
+### Tooling — Lint, Format, Commit Hooks
+
+Same setup as the backend, adapted to ESLint's flat-config format (the
+frontend was already on ESLint 9; the backend predates flat config and still
+uses `.eslintrc.js` — same intent, different-generation config file, don't
+"fix" one to look like the other).
+
+- **ESLint** (`eslint.config.js`) — `eslint-plugin-prettier/recommended` is
+  last in the `extends` array (it must be: it turns off any earlier rule that
+  would fight Prettier, then reports Prettier diffs as `prettier/prettier`
+  lint errors). `no-console` is restricted to `warn`/`error`, same as the
+  backend's `.eslintrc.js`. `.claude` is in `globalIgnores` alongside `dist`
+  — stray content under a gitignored path (e.g. a leftover worktree) must
+  never be able to fail `npm run lint`, since that script is also the
+  pre-commit hook.
+- **Prettier** (`.prettierrc`) — `{ singleQuote: true, trailingComma: 'all' }`,
+  byte-for-byte the same config as the backend's `.prettierrc`.
+- **Husky + commitlint** — `.husky/pre-commit` runs `npm run lint`,
+  `.husky/commit-msg` runs `npx commitlint --edit "$1"` against
+  `commitlint.config.js` (`@commitlint/config-conventional` — commit subjects
+  must be Conventional Commits, e.g. `feat(dashboard): add unit cards`), same
+  as the backend's `commitlint.config.ts` (`.js` here since this project has
+  no `ts-node`/`tsx` to load a `.ts` config). Unlike the backend, `husky` is a
+  real `devDependency` with a `"prepare": "husky"` script, so hooks are set up
+  automatically by `npm install` on a fresh clone rather than needing a
+  manual `npx husky` — if the backend's hook setup ever needs to survive a
+  fresh clone too, give it the same `prepare` script.
 
 ### Mobile View — Frontend's Full Responsibility
 
@@ -604,7 +727,8 @@ Paths below are relative to `../kharjf/kharj/`.
 
 ```
 src/
-├── App.jsx                         Auth routing (signin / signup / authenticated)
+├── App.jsx                         Auth gate (signin/signup/authenticated) + react-router-dom
+│                                   for authenticated pages (see Routing & Navigation)
 ├── App.css
 ├── main.jsx
 ├── index.css
@@ -625,42 +749,397 @@ src/
 │   │       └── auth.css            page scaffold only — all values reference tokens.css;
 │   │                               controls come from shared/components
 │   ├── dashboard/
-│   │   ├── Dashboard.jsx           home page content only — no header/back-button/bottom-nav
-│   │   │                           (that page template is built later); mounted directly by
-│   │   │                           App.jsx's AUTHENTICATED branch
+│   │   ├── Dashboard.jsx           home page content only — no header/back-button (that page
+│   │   │                           template is still deferred; the BottomNav itself is app-wide
+│   │   │                           chrome mounted once by App.jsx, not per-page)
 │   │   ├── index.js
 │   │   ├── api/
-│   │   │   └── dashboard.api.js    getAccountGroupByUnit(), getAccountWeeklyPaymentIncome(),
-│   │   │                           getRecentActivity({ type, page, size })
+│   │   │   └── dashboard.api.js    getAccountGroupByUnit(), getAccountWeeklyPaymentIncome() —
+│   │   │                           infrastructure only, no calculation/formatting (see logic/)
+│   │   ├── logic/
+│   │   │   └── dashboard.logic.js  domain logic — mergeGroupAndWeekly (transaction-rendering
+│   │   │                           logic that used to live here moved to shared/lib/transactions.js
+│   │   │                           once the Payment page needed the same rules)
 │   │   ├── hooks/
-│   │   │   └── useDashboard.js     fetches both; owns the activity type filter state
+│   │   │   └── useDashboard.js     fetches both statistic endpoints + activity (via
+│   │   │                           shared/api/transaction.api.js); owns the activity type
+│   │   │                           filter state; delegates calculation to logic/
 │   │   ├── components/
 │   │   │   ├── UnitCard.jsx        balance + weekly income/payment for one unit
-│   │   │   ├── ActionButtons.jsx   Pay / Income / Excel Import / Exchange tiles — handlers are
-│   │   │   │                       optional no-op-defaulted props; real navigation to those
-│   │   │   │                       screens isn't wired up yet (none of them exist)
-│   │   │   └── RecentActivityList.jsx  All/Income/Pay `ChipGroup` filter + activity `List`
+│   │   │   └── ActionButtons.jsx   Pay / Income / Exchange / Excel Import / Accounts tiles —
+│   │   │                           `onPay` navigates to `/payment`, `onIncome` to `/income`,
+│   │   │                           `onExchange` to `/exchange`, `onExcelImport` to `/inbox`,
+│   │   │                           `onAccounts` to `/accounts`; a 4-column grid (`.dashboard-actions`
+│   │   │                           in dashboard.css) so the 5 tiles wrap 4 + 1
 │   │   └── styles/
 │   │       └── dashboard.css       horizontally-scrollable unit-card row (touch carousel,
 │   │                               same pattern as the mockup's "Your Accounts" section)
-│   ├── accounts/
+│   ├── accounts/                   the dashboard's "Accounts" tile lands here — matches the
+│   │   │                           Visly "Accounts List"/"Account Details" mockup screens,
+│   │   │                           minus the parts that don't match the real data model (see
+│   │   │                           below)
+│   │   ├── Accounts.jsx            filterable, infinite-scrolling account list + a FAB that
+│   │   │                           opens CreateAccountModal; tapping a row opens
+│   │   │                           AccountDetailsModal over the list (not a route navigation
+│   │   │                           — see hooks/ below for why)
+│   │   ├── index.js
+│   │   ├── api/
+│   │   │   └── accounts.api.js     listAccounts({page, size, bankId, unitId, ownedBy}),
+│   │   │                           getAccount(id), createAccount(dto) — distinct from
+│   │   │                           shared/api/lookups.api.js's `getAccounts`, which is a
+│   │   │                           size-1 "resolve the one account a Bank+Unit+Owner triple
+│   │   │                           identifies" lookup for create-transaction forms, not a
+│   │   │                           full paginated listing
+│   │   ├── logic/
+│   │   │   └── accounts.logic.js   getAccountLabel, getAccountOwnerName,
+│   │   │                           isCreateAccountFormValid, buildCreateAccountPayload
+│   │   ├── hooks/
+│   │   │   ├── useAccountsPage.js       owns the Bank/Unit/Owner filters and, via
+│   │   │   │                           shared/hooks/usePaginatedList.js, the infinite-scroll
+│   │   │   │                           account list (10 at a time — changing any filter calls
+│   │   │   │                           `reload()`, resetting back to page 1); also owns the
+│   │   │   │                           create-account modal's form/open state and which
+│   │   │   │                           account id (if any) the details modal is showing
+│   │   │   └── useAccountDetailsPage.js  takes an account id and loads that one account, then
+│   │   │                                its scoped activity feed — used from inside
+│   │   │                                AccountDetailsModal, not a routed page; deliberately
+│   │   │                                has no synchronous `setState` directly in an effect
+│   │   │                                body (only inside `.then()`/`.catch()`/`.finally()`),
+│   │   │                                since `eslint-plugin-react-hooks`'s
+│   │   │                                `set-state-in-effect` rule flags that shape — it does
+│   │   │                                NOT flag setState reached only through a function
+│   │   │                                reference from another module (e.g.
+│   │   │                                `usePaginatedList.js`'s `reload`/`loadMore`), only
+│   │   │                                setState calls lexically inline in the effect (or in a
+│   │   │                                same-file `useCallback` the effect invokes directly)
+│   │   ├── components/
+│   │   │   ├── AccountFilters.jsx  Bank/Unit/Owner `Select`s with a real (non-disabled) "All"
+│   │   │   │                       option prepended to each options list — the shared Select's
+│   │   │   │                       usual `placeholder` prop renders a *disabled* placeholder
+│   │   │   │                       option, which is correct for a required create-form field
+│   │   │   │                       (forces a real choice) but wrong for an optional filter
+│   │   │   │                       (the user could never click back to "All" once they'd
+│   │   │   │                       picked something else)
+│   │   │   ├── AccountRow.jsx      a `ListRow` (bank+unit label, owner subtitle, priority
+│   │   │   │                       badge + balance trailing) — safe to make the whole row
+│   │   │   │                       `onClick` since, unlike inbox/'s PendingImportRow, nothing
+│   │   │   │                       inside it is itself an interactive element
+│   │   │   ├── CreateAccountModal.jsx  bottom-sheet-over-`useDismiss` pattern (see inbox/'s
+│   │   │   │                          ConvertModal); Bank/Unit/Owner selects + initial balance
+│   │   │   │                          + priority, `POST /account`
+│   │   │   └── AccountDetailsModal.jsx  same bottom-sheet pattern; one account's
+│   │   │                               Bank/Unit/Owner/Balance/Priority + a RecentActivityList
+│   │   │                               scoped to exactly that account (via the `ownedBy`
+│   │   │                               filter — see Recent Activity above); no "Owner
+│   │   │                               Splits"/percentage-split UI from the mockup, since
+│   │   │                               shared ownership in this app is modelled as separate
+│   │   │                               sibling accounts (same bank+unit, different `ownedBy`),
+│   │   │                               not a percentage split within one account row —
+│   │   │                               inventing that UI would misrepresent the real data
+│   │   │                               model
+│   │   └── styles/
+│   │       └── accounts.css        the FAB is positioned via a fixed, full-width,
+│   │                               `max-width`-capped `.accounts-fab-wrapper` (exactly
+│   │                               `.ui-bottom-nav`'s own centering technique) with
+│   │                               `justify-content: flex-end` and `pointer-events: none`,
+│   │                               and the button itself gets `pointer-events: auto` — a bare
+│   │                               `position: fixed; right: var(--space-6)` on the button
+│   │                               anchors to the *viewport* edge, which only matches the
+│   │                               phone-width column's edge on an actual phone; on a wide
+│   │                               desktop viewport (where `.accounts`'s `max-width` +
+│   │                               `margin: 0 auto` centers the column) it drifts away from
+│   │                               the visible content entirely
 │   ├── payments/
-│   ├── inbox/
+│   │   ├── Payment.jsx             create-payment form + a live-filtered RecentActivityList
+│   │   │                           (the same Bank/Unit selects double as the list's filter —
+│   │   │                           no separate filter UI; capped at 5 rows)
+│   │   ├── index.js
+│   │   ├── logic/
+│   │   │   └── payment.logic.js    isPaymentFormValid, buildCreatePaymentPayload (composes
+│   │   │                           Date+Time into `paidAt`), getSelectedAccountBalance
+│   │   ├── hooks/
+│   │   │   └── usePaymentPage.js   loads banks/units/relatedUsers once; owns form state; looks
+│   │   │                           up the selected account's balance once Bank+Unit+Owner are
+│   │   │                           all picked; owns the activity list (refetches on
+│   │   │                           bankId/unitId change); handles submit + refetch-after-create
+│   │   │                           — `createPayment` and the Bank/Unit/Owner/Account lookups
+│   │   │                           come from `shared/api/` (see below), payments/ has no
+│   │   │                           `api/` folder of its own anymore
+│   │   ├── components/
+│   │   │   └── PaymentForm.jsx     Bank/Unit/Owner/Category/Price/Date+Time/Description
+│   │   │                           fields, submit button (backend's `isFun`/`isMaman`
+│   │   │                           are still required booleans on `CreatePaymentDto` —
+│   │   │                           hardcoded `false` in payment.logic.js, no form control)
+│   │   └── styles/
+│   │       └── payment.css
+│   ├── income/                     mirrors payments/ — see CreateIncomeDto (backend) for fields
+│   │   ├── Income.jsx              create-income form + a live-filtered RecentActivityList,
+│   │   │                           same layout/pattern as Payment.jsx (also capped at 5 rows)
+│   │   ├── index.js
+│   │   ├── logic/
+│   │   │   └── income.logic.js     isIncomeFormValid, buildCreateIncomePayload,
+│   │   │                           getSelectedAccount — unlike Payment, `CreateIncomeDto`
+│   │   │                           wants `accountId` directly (income always credits exactly
+│   │   │                           one account, no allocation-across-accounts logic like
+│   │   │                           payment.logic.ts's selectAccountsForPayment), so the form
+│   │   │                           still collects Bank/Unit/Owner to resolve which account,
+│   │   │                           but the resolved account's `id` is passed into
+│   │   │                           buildCreateIncomePayload separately rather than being part
+│   │   │                           of the DTO shape itself
+│   │   ├── hooks/
+│   │   │   └── useIncomePage.js    same shape as usePaymentPage.js, keeps the whole resolved
+│   │   │                           account (not just its balance) since accountId is needed
+│   │   │                           at submit time; `createIncome` comes from `shared/api/`
+│   │   ├── components/
+│   │   │   └── IncomeForm.jsx      Bank/Unit/Owner/Category/Amount/Date+Time/Description
+│   │   │                           fields, submit button
+│   │   └── styles/
+│   │       └── income.css
+│   ├── exchange/                   mirrors payments/ — see CreateExchangeDto (backend) for fields
+│   │   ├── Exchange.jsx            From/To account-transfer form + a live-filtered
+│   │   │                           RecentActivityList scoped by the "From" side's Bank/Unit
+│   │   │                           (capped at 5 rows)
+│   │   ├── index.js
+│   │   ├── api/
+│   │   │   └── exchange.api.js     createExchange(dto) — kept feature-local (unlike
+│   │   │                           createPayment/createIncome) since only Exchange calls it;
+│   │   │                           Bank/Unit/Owner/Account lookups still come from
+│   │   │                           shared/api/lookups.api.js
+│   │   ├── logic/
+│   │   │   └── exchange.logic.js   isExchangeFormValid, buildCreateExchangePayload,
+│   │   │                           getSelectedAccount — like income.logic.js,
+│   │   │                           `CreateExchangeDto` wants `fromAccountId`/`toAccountId`
+│   │   │                           directly (resolved separately, no allocation logic) plus
+│   │   │                           `toUser` (`form.toUserId`, the book the destination
+│   │   │                           account lives in — see the Exchange and Cross-Book
+│   │   │                           Lookups sections above)
+│   │   ├── hooks/
+│   │   │   └── useExchangePage.js  same shape as usePaymentPage.js, but resolves two accounts
+│   │   │                           (`fromAccount`/`toAccount`) independently; also re-fetches
+│   │   │                           `toBanks`/`toUnits` (via `lookups.api.js`'s `userId` param)
+│   │   │                           whenever the "To" book (`form.toUserId`) changes, since a
+│   │   │                           related user's book can have different user-defined
+│   │   │                           banks/units than the caller's own — `setToUserId` (not
+│   │   │                           plain `setField`) clears the now-stale
+│   │   │                           toBankId/toUnitId/toOwnerId whenever the book changes
+│   │   ├── components/
+│   │   │   └── ExchangeForm.jsx    two `Section`s ("From"/"To"), each
+│   │   │                           Bank/Unit/Owner/Balance/Amount, plus a "To"-only "Book"
+│   │   │                           select (which related user's book) and a shared Date+Time
+│   │   └── styles/
+│   │       └── exchange.css        `.exchange-form` overrides `.ui-form`'s gap to
+│   │                               `--space-7` — more breathing room between the two
+│   │                               grouped Sections than a flat field stack needs
+│   ├── inbox/                      the dashboard's "Excel Import" tile lands here — matches the
+│   │   │                           Visly "Payments Inbox" mockup screen
+│   │   ├── Inbox.jsx               a Bank filter, two import trigger buttons
+│   │   │                           (`ImportTriggers`), then an infinite-scrolling "Pending
+│   │   │                           Imports" list; each row's "Convert" button opens
+│   │   │                           ConvertModal
+│   │   ├── index.js
+│   │   ├── api/
+│   │   │   └── inbox.api.js        uploadBankFile(file) (multipart → `/file/upload/bank-payment`),
+│   │   │                           importBankExport({bankId, uploadedFile}), importText({bankId,
+│   │   │                           text}), getPendingImports({bankId, page, size}),
+│   │   │                           deletePendingImport(id)
+│   │   ├── logic/
+│   │   │   └── inbox.logic.js      isPendingIncome, getSignedPendingAmount,
+│   │   │                           getPendingAccountLabel, getPendingOwnerName,
+│   │   │                           getPendingSubtitle, buildConvertInitialForm (splits
+│   │   │                           `paidAt` into date/time; seeds `ownerId` from the row's
+│   │   │                           account owner but it stays user-editable in the modal;
+│   │   │                           `description` starts empty — it's a separate,
+│   │   │                           user-authored field, not prefilled from the row's own
+│   │   │                           parsed `description`, which the modal shows read-only
+│   │   │                           alongside it instead, see ConvertModal.jsx below),
+│   │   │                           isConvertFormValid, isConvertOwnerChanged,
+│   │   │                           buildConvertPayload(row, form, resolvedAccountId) —
+│   │   │                           converting isn't a dedicated endpoint (see
+│   │   │                           UncompletePayments above): this builds whichever of
+│   │   │                           `CreatePaymentDto`/`CreateIncomeDto` the row's `type`
+│   │   │                           calls for, with `uncompletePaymentId` set. The owner is
+│   │   │                           editable (not fixed to the pending row's account), which
+│   │   │                           the two DTOs handle differently: `CreatePaymentDto` takes
+│   │   │                           `ownerId` directly (`payment.logic.ts`'s allocation
+│   │   │                           already draws from whichever of the caller's own accounts
+│   │   │                           matches bankId+unitId+that owner), but `CreateIncomeDto`
+│   │   │                           wants a concrete `accountId` — so when the picked owner
+│   │   │                           differs from the row's original account owner
+│   │   │                           (`isConvertOwnerChanged`), `useInboxPage.js` resolves the
+│   │   │                           right account first via `shared/api/lookups.api.js`'s
+│   │   │                           `getAccounts({bankId, unitId, ownedBy})` (same lookup
+│   │   │                           every create-transaction form already uses) before
+│   │   │                           building the payload; unchanged-owner conversions skip
+│   │   │                           that extra call and reuse the row's own `accountId`
+│   │   ├── hooks/
+│   │   │   └── useInboxPage.js     owns the Bank filter (via a wrapped fetch function, same
+│   │   │                           `reload()`-on-filter-change shape as
+│   │   │                           accounts/hooks/useAccountsPage.js); the upload-modal and
+│   │   │                           text-import-modal open/form state; the pending list via
+│   │   │                           shared/hooks/usePaginatedList.js (10 at a time); and the
+│   │   │                           convert modal's open row/form state — resolves the account
+│   │   │                           (see inbox.logic.js above) and dispatches `createIncome`
+│   │   │                           or `createPayment` (both from `shared/api/`) based on the
+│   │   │                           row's `type`
+│   │   ├── components/
+│   │   │   ├── InboxFilters.jsx    Bank `Select` with a real "All" option (same reasoning as
+│   │   │   │                       accounts/'s AccountFilters.jsx)
+│   │   │   ├── ImportTriggers.jsx  two buttons ("Import File" / "Paste SMS Text") that open
+│   │   │   │                       UploadFileModal / TextImportModal — replaces an earlier
+│   │   │   │                       version where both forms sat always-visible on the page;
+│   │   │   │                       same bottom-sheet-on-demand pattern Accounts' FAB uses
+│   │   │   ├── UploadFileModal.jsx  Bank select + file input + "Import File", bottom-sheet
+│   │   │   ├── TextImportModal.jsx  Bank select + Textarea + "Parse Text", bottom-sheet
+│   │   │   ├── PendingImportRow.jsx  a `ListRow` (no `onClick` — it renders as a plain div)
+│   │   │   │                         plus a separate action row with "Convert"/discard
+│   │   │   │                         buttons; a `ListRow` with `onClick` renders as a
+│   │   │   │                         `<button>` via `Pressable`, which can't contain another
+│   │   │   │                         button, hence the two are kept as siblings, not nested.
+│   │   │   │                         Title is always the Bank·Unit label (not the row's
+│   │   │   │                         parsed `description` — a card with a real description
+│   │   │   │                         but no visible bank name was confusing); subtitle packs
+│   │   │   │                         description (if any) + date·time + owner name into one
+│   │   │   │                         line
+│   │   │   └── ConvertModal.jsx    bottom-sheet overlay (feature-local — no shared Modal
+│   │   │                           primitive exists yet, and only Inbox/Accounts need one so
+│   │   │                           far, each with its own tiny variant); dismissed via
+│   │   │                           `shared/hooks/useDismiss.js`, same as DateField's popover.
+│   │   │                           No mockup boilerplate paragraph (the Visly mockup's
+│   │   │                           "Verify and categorize this parsed transaction before
+│   │   │                           adding to Kharj" text doesn't correspond to anything real
+│   │   │                           to show) — replaced with the row's own parsed
+│   │   │                           `description`, shown read-only right under the header
+│   │   │                           (`.inbox-modal__description`, own stacked-layout style —
+│   │   │                           real parsed descriptions can be long paragraphs, unlike
+│   │   │                           the short label+value pairs `.inbox-modal__account` was
+│   │   │                           built for). Field order below that otherwise matches every
+│   │   │                           other create-transaction form in this app — Owner select
+│   │   │                           (editable, pre-filled from the row's account but not
+│   │   │                           locked to it) before Category, then Date/Time, then a
+│   │   │                           second, *editable* Description `Textarea` bound to
+│   │   │                           `form.description` — this is the one `buildConvertPayload`
+│   │   │                           actually sends; the read-only one up top is reference
+│   │   │                           only, never submitted
+│   │   └── styles/
+│   │       └── inbox.css
+│   └── debts/
 │   └── debts/
 └── shared/
     ├── components/                 Design-system components (see below)
     │   ├── index.js                barrel — import from here, not from files
-    │   └── icons.jsx               inline stroke icons, inherit currentColor
+    │   ├── icons.jsx                inline stroke icons, inherit currentColor
+    │   ├── RecentActivityList.jsx  filterable (All/Income/Pay) transaction list — shared by
+    │   │                           dashboard, payments, income, exchange and inbox, see
+    │   │                           Domain Logic vs Infrastructure
+    │   └── BottomNav.jsx           persistent tab bar, generic over a `tabs` prop (see
+    │                               Routing & Navigation)
+    ├── api/
+    │   ├── transaction.api.js      getRecentActivity({ type, bankId, unitId, page, size })
+    │   ├── lookups.api.js          getBanks({ userId }), getUnits({ userId }),
+    │   │                           getRelatedUsers(), getAccounts({ bankId, unitId, ownedBy,
+    │   │                           userId }) — reference-data lookups shared by every
+    │   │                           create-transaction form; promoted out of
+    │   │                           payments/api/payment.api.js once income/ needed the exact
+    │   │                           same ones (same graduation rule as shared/lib/transactions.js).
+    │   │                           `userId` on all three is optional and only matters for
+    │   │                           exchange/'s "To" side — see Cross-Book Lookups above; every
+    │   │                           other caller omits it and gets their own book, unchanged
+    │   └── create-transaction.api.js  createPayment(dto), createIncome(dto) — promoted out of
+    │                               payments/api/ and income/api/ once inbox/'s convert flow
+    │                               needed to call both from a third feature; `createExchange`
+    │                               stayed feature-local in exchange/api/ since nothing else
+    │                               calls it
+    ├── constants/
+    │   ├── paymentCategories.js    PAYMENT_CATEGORIES — hardcoded, mirrors the backend
+    │   │                           PaymentCategory enum (no categories endpoint exists; see
+    │   │                           Shared Conventions for keeping these in sync); promoted out
+    │   │                           of payments/constants/ once inbox/'s convert modal needed
+    │   │                           it too (same graduation rule as create-transaction.api.js)
+    │   └── incomeCategories.js     INCOME_CATEGORIES — same story, promoted out of
+    │                               income/constants/
     ├── hooks/
-    │   └── useDismiss.js           outside-click + Escape dismissal for popovers
+    │   ├── useDismiss.js           outside-click + Escape dismissal for popovers
+    │   ├── usePaginatedList.js     generic "fetch a page, accumulate rows, load more" state —
+    │   │                           `{page,size} => Promise<{rows,paginationData}>` in,
+    │   │                           `{rows,total,loading,loadingMore,error,hasMore,reload,
+    │   │                           loadMore}` out; `reload()` resets to page 1 (call it from
+    │   │                           an effect keyed on whatever filters should restart the
+    │   │                           list); `loadMore()` fetches the next page and appends.
+    │   │                           First used by accounts/ and inbox/'s pending list at the
+    │   │                           same time, so it started in shared/ rather than one
+    │   │                           feature's own hooks/
+    │   └── useIntersectionLoadMore.js  returns a `ref` for a sentinel element; calls
+    │                                   `onLoadMore` via `IntersectionObserver` once the
+    │                                   sentinel scrolls near-into view (`rootMargin: '200px'`)
+    │                                   and `hasMore && !loading` — pairs with
+    │                                   usePaginatedList.js's `loadMore`/`hasMore`/`loadingMore`
     ├── lib/
-    │   └── date.js                 dayjs + Jalali helpers
+    │   ├── date.js                 dayjs + Jalali helpers
+    │   └── transactions.js         ACTIVITY_FILTERS + transaction-rendering rules (title,
+    │                               subtitle, signed amount, source label) — promoted from
+    │                               dashboard.logic.js once payments needed them too
     ├── styles/
     │   ├── tokens.css              design tokens — the single source of truth
     │   └── components.css          all component styles
     └── utils/
         └── index.js                cx, splitFieldProps, toggleInArray
 ```
+
+### Domain Logic vs Infrastructure (`logic/`)
+
+Mirrors the backend's `logics/` split (`Coding Rules` #4: "any business
+calculation or data transformation belongs in a logics/ file, not inline in
+the service"). The frontend equivalent: a feature that has domain rules —
+merging/deriving data, deciding what a value means, formatting it for
+display — gets its own `logic/<feature>.logic.js`, e.g.
+`features/dashboard/logic/dashboard.logic.js`.
+
+- **`logic/` files are pure and framework-free.** Data in, data out. No
+  `useState`/`useEffect`, no `axios`, no JSX, no DOM. This is what makes them
+  trivial to unit test later and to reuse across components.
+- **`api/` is infrastructure** — it only knows how to call an endpoint and
+  unwrap the `{ success, message, data }` envelope. It must not merge,
+  transform, or format the response; that's `logic/`'s job.
+- **Hooks (`hooks/`) are infrastructure too** — they orchestrate: call `api/`,
+  call `logic/` functions to shape the result, hold React state. Same
+  division of responsibility as a NestJS service calling repositories and
+  logic functions.
+- **Components stay declarative** — a `.jsx` file should read as "given this
+  data, render this," not compute business rules inline. If a component has a
+  ternary/ helper deciding what a value *means* (not just how to lay it out),
+  that's a `logic/` candidate, not a component-local helper.
+- **Fixed vocabularies go in `constants/`**, not `logic/` — this already
+  existed for `features/auth/constants/authStates.js`; `paymentCategories.js`/
+  `incomeCategories.js` used to live in their own features' `constants/`
+  too, until they graduated to `shared/constants/` (see below).
+- **Once a feature's `logic/`/`api/` is genuinely reused by a second feature,
+  it graduates to `shared/`** — not before (don't pre-promote something only
+  one feature uses). `shared/lib/transactions.js` and
+  `shared/api/transaction.api.js` are the first example: `RecentActivityList`
+  (now `shared/components/RecentActivityList.jsx`) started as
+  dashboard-only, then the Payment page needed the exact same rendering
+  rules and data fetch, so both moved up rather than being duplicated.
+  `shared/lib/` is to `shared/api/` what a feature's own `logic/` is to its
+  `api/` — same split, wider scope. `shared/api/lookups.api.js`
+  (`getBanks`/`getUnits`/`getRelatedUsers`/`getAccounts`) is the second
+  example: it started in `payments/api/payment.api.js`, then `income/` needed
+  the exact same Bank/Unit/Owner/Account lookups, so it moved up too.
+  `shared/api/create-transaction.api.js` (`createPayment`/`createIncome`) and
+  `shared/constants/{paymentCategories,incomeCategories}.js` are the third:
+  `payments/` and `income/` each held their own copy until `inbox/`'s convert
+  modal needed both create calls and both category lists from a third
+  feature, so all four moved up — `payments/`/`income/` now have no `api/` or
+  `constants/` folder of their own at all, only `logic/`, `hooks/`,
+  `components/` and `styles/`. `exchange/api/exchange.api.js`'s
+  `createExchange` deliberately did **not** graduate — nothing but `exchange/`
+  calls it, so promoting it would be the "pre-promote something only one
+  feature uses" mistake this rule warns against.
+
+Not every feature needs a `logic/` folder — `auth/` doesn't have one yet
+because its only domain rule (the `username`/`email` fallback in
+`useAuth.js`) is a single line; add the folder once there's an actual
+calculation or transformation to put in it, same as the backend only adds a
+`logics/` file when a module has one.
 
 ### Auth Flow
 
@@ -754,7 +1233,10 @@ Internal conventions (hold these when adding components):
    `--radius-card` (16px) for cards, `--radius-pill` for chips/badges,
    `--radius-tile` for icon tiles.
 3. **One `variant="primary"` Button per screen.** It is that screen's single call to
-   action; everything else is `secondary`, `ghost`, or `link`.
+   action; everything else is `secondary`, `ghost`, or `link`. `IconButton` has the
+   same three variants (default `ghost`, plus `secondary` and `primary`) — the
+   Accounts list's FAB (`accounts-fab`, `IconButton variant="primary"`) is the first
+   `primary` `IconButton` use; the same one-per-screen restraint applies to it too.
 4. **Selection has two forms** — Cards select with a blue border + tinted fill; Chips
    select with a solid blue fill. Don't mix them.
 5. **Money direction is meaning.** `Amount` renders green/inbound-arrow for positive
@@ -841,6 +1323,8 @@ Run from `../kharjf/kharj/`:
 ```bash
 npm run dev      # development
 npm run build    # production build
+npm run lint      # eslint --fix (includes the prettier/prettier rule)
+npm run format    # prettier --write, for files eslint doesn't cover (e.g. CSS)
 ```
 
 Environment variables (`../kharjf/kharj/.env`):
@@ -858,3 +1342,12 @@ VITE_API_URL=http://localhost:3000
 - Persian (Jalali) calendar input is supported via the date tool
 - `ballance` (note the spelling) is the field name used throughout — do not correct it
 - Error messages are snake_case strings, e.g. `'unit-not-found'`, `'insufficient-balance'`
+- The frontend's `PAYMENT_CATEGORIES` (`../kharjf/kharj/src/shared/constants/paymentCategories.js`)
+  is a hand-maintained mirror of the backend's `PaymentCategory` enum
+  (`src/payment/enums/payment-category.enum.ts`) — there's no categories
+  endpoint, so a new category added to the backend enum needs the same value
+  added to that frontend list by hand, or it silently won't be selectable in
+  the Payment form (or Inbox's convert modal, for a PAYMENT-type pending
+  import). Same pattern for `INCOME_CATEGORIES`
+  (`../kharjf/kharj/src/shared/constants/incomeCategories.js`) mirroring
+  `IncomeCategory` (`src/income/enums/income-category.enum.ts`).

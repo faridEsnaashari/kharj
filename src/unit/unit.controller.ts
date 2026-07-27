@@ -6,6 +6,7 @@ import {
   Param,
   Post,
   Put,
+  Query,
   Req,
   UseGuards,
   UsePipes,
@@ -16,6 +17,7 @@ import { HasAccessGuard } from 'src/common/gaurds/hasAccess.gaurd';
 import { User } from 'src/user/entities/user.entity';
 import { CreateUnitDto, createUnitDtoSchema } from './dtos/create-unit.dto';
 import { UpdateUnitDto, updateUnitDtoSchema } from './dtos/update-unit.dto';
+import { GetAllUnitDto, getAllUnitDtoSchema } from './dtos/get-all-unit.dto';
 
 @Controller('unit')
 @UseGuards(HasAccessGuard)
@@ -23,8 +25,12 @@ export class UnitController {
   constructor(private unitService: UnitService) {}
 
   @Get()
-  async findAllUnits(@Req() req: { user: User }) {
-    return this.unitService.findAllUnits(req.user);
+  @UsePipes(new ZodValidationPipe(getAllUnitDtoSchema))
+  async findAllUnits(
+    @Req() req: { user: User },
+    @Query() query: GetAllUnitDto,
+  ) {
+    return this.unitService.findAllUnits(query, req.user);
   }
 
   @Get(':id')

@@ -7,7 +7,9 @@ import { Op } from 'sequelize';
 import { BankRepository } from './entities/repositories/bank.repository';
 import { CreateBankDto } from './dtos/create-bank.dto';
 import { UpdateBankDto } from './dtos/update-bank.dto';
+import { GetAllBankDto } from './dtos/get-all-bank.dto';
 import { User } from 'src/user/entities/user.entity';
+import { UserService } from 'src/user/user.service';
 import { AccountRepository } from 'src/account/entities/repositories/account.repository';
 
 @Injectable()
@@ -15,11 +17,17 @@ export class BankService {
   constructor(
     private bankRepository: BankRepository,
     private accountRepository: AccountRepository,
+    private userService: UserService,
   ) {}
 
-  async findAllBanks(user: User) {
+  async findAllBanks(query: GetAllBankDto, user: User) {
+    const targetUserId = await this.userService.resolveTargetUserId(
+      query.userId,
+      user,
+    );
+
     return this.bankRepository.findAll({
-      [Op.or]: [{ userId: null }, { userId: user.id }],
+      [Op.or]: [{ userId: null }, { userId: targetUserId }],
     });
   }
 

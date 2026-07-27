@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { WhereOptions } from 'sequelize';
 import { AccountRepository } from 'src/account/entities/repositories/account.repository';
 import { PaymentRepository } from 'src/payment/entities/repositories/payment.repository';
 import { IncomeRepository } from 'src/income/entities/repositories/income.repository';
@@ -9,7 +10,7 @@ import { GetRecentActivityDto } from './dtos/get-all-transactions.dto';
 import { Paginated } from 'src/common/types/pagination.type';
 import { Transaction } from './types/transaction.type';
 import { TransactionType } from './enums/transaction-type.enum';
-import { AccountModel } from 'src/account/entities/account.entity';
+import { Account, AccountModel } from 'src/account/entities/account.entity';
 import { BankModel } from 'src/bank/entities/bank.entity';
 import { UnitModel } from 'src/unit/entities/unit.entity';
 import {
@@ -30,13 +31,20 @@ export class TransactionService {
     query: GetRecentActivityDto,
     user: User,
   ): Promise<Paginated<Transaction>> {
-    const { page, size, type } = query;
+    const { page, size, type, bankId, unitId, ownedBy } = query;
     const limit = fetchLimitForPage(page, size);
     const includePayments = !type || type === TransactionType.PAYMENT;
     const includeIncomes = !type || type === TransactionType.INCOME;
 
+    const accountWhere: WhereOptions<Account> = {
+      userId: user.id,
+      ...(bankId ? { bankId } : {}),
+      ...(unitId ? { unitId } : {}),
+      ...(ownedBy ? { ownedBy } : {}),
+    };
+
     const accounts = await this.accountRepository.findAll({
-      where: { userId: user.id },
+      where: accountWhere,
       attributes: ['id'],
     });
 

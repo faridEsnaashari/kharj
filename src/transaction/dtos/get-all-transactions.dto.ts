@@ -13,6 +13,18 @@ export const getRecentActivityDtoSchema = z.object({
     .default('20')
     .transform((v) => +v),
   type: z.nativeEnum(TransactionType).optional(),
+  bankId: z
+    .string()
+    .optional()
+    .transform((v) => (v ? +v : undefined)),
+  unitId: z
+    .string()
+    .optional()
+    .transform((v) => (v ? +v : undefined)),
+  ownedBy: z
+    .string()
+    .optional()
+    .transform((v) => (v ? +v : undefined)),
 });
 
 export type GetRecentActivityDto = z.infer<typeof getRecentActivityDtoSchema>;

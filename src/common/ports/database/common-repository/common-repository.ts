@@ -29,6 +29,9 @@ export class CommonRepository<
     const result = await this.model.create(
       entity as unknown as MakeNullishOptional<TCreate>,
     );
+
+    await result.reload();
+
     return raw ? JSON.parse(JSON.stringify(result)) : result;
   }
 

@@ -1,7 +1,12 @@
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { AccountService } from './account.service';
 import { AccountRepository } from './entities/repositories/account.repository';
 import { UserRepository } from 'src/user/entities/repositories/user.repository';
+import { UserService } from 'src/user/user.service';
 import { UnitRepository } from 'src/unit/entities/repositories/unit.repository';
 import { BankRepository } from 'src/bank/entities/repositories/bank.repository';
 import { PaymentRepository } from 'src/payment/entities/repositories/payment.repository';
@@ -19,6 +24,7 @@ describe('AccountService', () => {
   let service: AccountService;
   let accountRepository: MockRepository;
   let userRepository: MockRepository;
+  let userService: { resolveTargetUserId: jest.Mock };
   let unitRepository: MockRepository;
   let bankRepository: MockRepository;
   let paymentRepository: MockRepository;
@@ -36,6 +42,7 @@ describe('AccountService', () => {
   beforeEach(() => {
     accountRepository = createMockRepository();
     userRepository = createMockRepository();
+    userService = { resolveTargetUserId: jest.fn() };
     unitRepository = createMockRepository();
     bankRepository = createMockRepository();
     paymentRepository = createMockRepository();
@@ -44,6 +51,7 @@ describe('AccountService', () => {
     service = new AccountService(
       accountRepository as unknown as AccountRepository,
       userRepository as unknown as UserRepository,
+      userService as unknown as UserService,
       unitRepository as unknown as UnitRepository,
       bankRepository as unknown as BankRepository,
       paymentRepository as unknown as PaymentRepository,
@@ -58,6 +66,9 @@ describe('AccountService', () => {
     accountRepository.pagination.mockResolvedValue({ rows: [], count: 0 });
     paymentRepository.findAll.mockResolvedValue([]);
     incomeRepository.findAll.mockResolvedValue([]);
+    userService.resolveTargetUserId.mockImplementation(
+      async (requestedUserId, u) => requestedUserId ?? u.id,
+    );
   });
 
   it('throws NotFoundException when the unit is not accessible to the user', async () => {
@@ -132,6 +143,32 @@ describe('AccountService', () => {
     );
   });
 
+  it('findAllAccounts resolves the query userId through UserService and scopes the lookup to it', async () => {
+    userService.resolveTargetUserId.mockResolvedValue(2);
+
+    const query = { page: 1, size: 20, userId: 2 } as GetAllAccountsDto;
+
+    await service.findAllAccounts(query, user);
+
+    expect(userService.resolveTargetUserId).toHaveBeenCalledWith(2, user);
+    expect(accountRepository.pagination).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { userId: 2 } }),
+      { page: 1, size: 20 },
+    );
+  });
+
+  it('findAllAccounts propagates a rejection from UserService.resolveTargetUserId', async () => {
+    userService.resolveTargetUserId.mockRejectedValue(
+      new ForbiddenException('user-not-related'),
+    );
+
+    const query = { page: 1, size: 20, userId: 99 } as GetAllAccountsDto;
+
+    await expect(service.findAllAccounts(query, user)).rejects.toThrow(
+      ForbiddenException,
+    );
+  });
+
   it('getGroupByUnit groups the user accounts by unit', async () => {
     const unit20 = { id: 20 };
     const unit30 = { id: 30 };
@@ -192,7 +229,9 @@ describe('AccountService', () => {
         where: expect.objectContaining({ accountId: [1] }),
       }),
     );
-    expect(result).toEqual([{ unitId: 20, weeklyIncome: 45, weeklyPayment: 30 }]);
+    expect(result).toEqual([
+      { unitId: 20, weeklyIncome: 45, weeklyPayment: 30 },
+    ]);
   });
 
   it('getWeeklyPaymentIncome narrows to one unit when unitId is provided', async () => {

@@ -1,25 +1,34 @@
 import { ConflictException, NotFoundException } from '@nestjs/common';
+import { Op } from 'sequelize';
 import { BankService } from './bank.service';
 import { BankRepository } from './entities/repositories/bank.repository';
 import { AccountRepository } from 'src/account/entities/repositories/account.repository';
+import { UserService } from 'src/user/user.service';
 import {
   createMockRepository,
   MockRepository,
 } from 'src/common/test-utils/mock-repository';
 import { User } from 'src/user/entities/user.entity';
+import { GetAllBankDto } from './dtos/get-all-bank.dto';
 
 describe('BankService', () => {
   let service: BankService;
   let bankRepository: MockRepository;
   let accountRepository: MockRepository;
+  let userService: { resolveTargetUserId: jest.Mock };
   const user = { id: 1 } as User;
 
   beforeEach(() => {
     bankRepository = createMockRepository();
     accountRepository = createMockRepository();
+    userService = { resolveTargetUserId: jest.fn() };
+    userService.resolveTargetUserId.mockImplementation(
+      async (requestedUserId, u) => requestedUserId ?? u.id,
+    );
     service = new BankService(
       bankRepository as unknown as BankRepository,
       accountRepository as unknown as AccountRepository,
+      userService as unknown as UserService,
     );
   });
 
@@ -28,7 +37,22 @@ describe('BankService', () => {
       const banks = [{ id: 1 }, { id: 2 }];
       bankRepository.findAll.mockResolvedValue(banks);
 
-      await expect(service.findAllBanks(user)).resolves.toBe(banks);
+      await expect(
+        service.findAllBanks({} as GetAllBankDto, user),
+      ).resolves.toBe(banks);
+    });
+
+    it('looks up a related user book when userId is a known relation', async () => {
+      const banks = [{ id: 1 }];
+      bankRepository.findAll.mockResolvedValue(banks);
+      userService.resolveTargetUserId.mockResolvedValue(2);
+
+      await service.findAllBanks({ userId: 2 } as GetAllBankDto, user);
+
+      expect(userService.resolveTargetUserId).toHaveBeenCalledWith(2, user);
+      expect(bankRepository.findAll).toHaveBeenCalledWith({
+        [Op.or]: [{ userId: null }, { userId: 2 }],
+      });
     });
   });
 

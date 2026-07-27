@@ -8,6 +8,14 @@ import { DatabaseConnectionLogger } from './database-connection.logger';
   imports: [
     SequelizeModule.forRoot({
       dialect: 'mysql',
+      timezone:
+        appConfigs.nodeEnv === 'develop'
+          ? databaseConfig.development.timezone
+          : databaseConfig.production.timezone,
+      dialectOptions:
+        appConfigs.nodeEnv === 'develop'
+          ? databaseConfig.development.dialectOptions
+          : databaseConfig.production.dialectOptions,
       host:
         appConfigs.nodeEnv === 'develop'
           ? databaseConfig.development.host

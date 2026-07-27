@@ -99,7 +99,11 @@ describe('sumWeeklyPaymentIncomeByUnit', () => {
       buildAccount(2, 20, 50),
       buildAccount(3, 30, 7),
     ];
-    const payments = [buildPayment(1, 10), buildPayment(2, 5), buildPayment(3, 2)];
+    const payments = [
+      buildPayment(1, 10),
+      buildPayment(2, 5),
+      buildPayment(3, 2),
+    ];
     const incomes = [buildIncome(1, 40), buildIncome(3, 3)];
 
     const result = sumWeeklyPaymentIncomeByUnit(accounts, payments, incomes);

@@ -1,25 +1,34 @@
 import { ConflictException, NotFoundException } from '@nestjs/common';
+import { Op } from 'sequelize';
 import { UnitService } from './unit.service';
 import { UnitRepository } from './entities/repositories/unit.repository';
 import { AccountRepository } from 'src/account/entities/repositories/account.repository';
+import { UserService } from 'src/user/user.service';
 import {
   createMockRepository,
   MockRepository,
 } from 'src/common/test-utils/mock-repository';
 import { User } from 'src/user/entities/user.entity';
+import { GetAllUnitDto } from './dtos/get-all-unit.dto';
 
 describe('UnitService', () => {
   let service: UnitService;
   let unitRepository: MockRepository;
   let accountRepository: MockRepository;
+  let userService: { resolveTargetUserId: jest.Mock };
   const user = { id: 1 } as User;
 
   beforeEach(() => {
     unitRepository = createMockRepository();
     accountRepository = createMockRepository();
+    userService = { resolveTargetUserId: jest.fn() };
+    userService.resolveTargetUserId.mockImplementation(
+      async (requestedUserId, u) => requestedUserId ?? u.id,
+    );
     service = new UnitService(
       unitRepository as unknown as UnitRepository,
       accountRepository as unknown as AccountRepository,
+      userService as unknown as UserService,
     );
   });
 
@@ -28,10 +37,22 @@ describe('UnitService', () => {
       const units = [{ id: 1 }, { id: 2 }];
       unitRepository.findAll.mockResolvedValue(units);
 
-      const result = await service.findAllUnits(user);
+      const result = await service.findAllUnits({} as GetAllUnitDto, user);
 
       expect(result).toBe(units);
       expect(unitRepository.findAll).toHaveBeenCalledTimes(1);
+    });
+
+    it('looks up a related user book when userId is a known relation', async () => {
+      unitRepository.findAll.mockResolvedValue([]);
+      userService.resolveTargetUserId.mockResolvedValue(2);
+
+      await service.findAllUnits({ userId: 2 } as GetAllUnitDto, user);
+
+      expect(userService.resolveTargetUserId).toHaveBeenCalledWith(2, user);
+      expect(unitRepository.findAll).toHaveBeenCalledWith({
+        [Op.or]: [{ userId: null }, { userId: 2 }],
+      });
     });
   });
 

@@ -6,6 +6,7 @@ import {
   Param,
   Post,
   Put,
+  Query,
   Req,
   UseGuards,
   UsePipes,
@@ -16,6 +17,7 @@ import { HasAccessGuard } from 'src/common/gaurds/hasAccess.gaurd';
 import { User } from 'src/user/entities/user.entity';
 import { CreateBankDto, createBankDtoSchema } from './dtos/create-bank.dto';
 import { UpdateBankDto, updateBankDtoSchema } from './dtos/update-bank.dto';
+import { GetAllBankDto, getAllBankDtoSchema } from './dtos/get-all-bank.dto';
 
 @Controller('bank')
 @UseGuards(HasAccessGuard)
@@ -23,8 +25,12 @@ export class BankController {
   constructor(private bankService: BankService) {}
 
   @Get()
-  async findAllBanks(@Req() req: { user: User }) {
-    return this.bankService.findAllBanks(req.user);
+  @UsePipes(new ZodValidationPipe(getAllBankDtoSchema))
+  async findAllBanks(
+    @Req() req: { user: User },
+    @Query() query: GetAllBankDto,
+  ) {
+    return this.bankService.findAllBanks(query, req.user);
   }
 
   @Get(':id')

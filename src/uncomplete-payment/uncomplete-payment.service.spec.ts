@@ -226,6 +226,46 @@ describe('UncompletePaymentService', () => {
     });
   });
 
+  describe('getAllUncompletePayments', () => {
+    it('scopes the lookup to the requesting user and paginates', async () => {
+      accountRepository.findAll.mockResolvedValue([{ id: 1 }, { id: 2 }]);
+      uncompletePaymentRepository.pagination.mockResolvedValue({
+        rows: [],
+        count: 0,
+      });
+
+      const query = { page: 1, size: 20 } as never;
+
+      await service.getAllUncompletePayments(query, user);
+
+      expect(accountRepository.findAll).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { userId: 1 } }),
+      );
+      expect(uncompletePaymentRepository.pagination).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ accountId: [1, 2] }),
+        }),
+        { page: 1, size: 20 },
+      );
+    });
+
+    it('narrows accounts by bankId when provided', async () => {
+      accountRepository.findAll.mockResolvedValue([{ id: 1 }]);
+      uncompletePaymentRepository.pagination.mockResolvedValue({
+        rows: [],
+        count: 0,
+      });
+
+      const query = { page: 1, size: 20, bankId: 10 } as never;
+
+      await service.getAllUncompletePayments(query, user);
+
+      expect(accountRepository.findAll).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { userId: 1, bankId: 10 } }),
+      );
+    });
+  });
+
   describe('deleteUncompletePayment', () => {
     it('throws NotFoundException when the account does not belong to the user', async () => {
       uncompletePaymentRepository.findOneByIdOrFail.mockResolvedValue({

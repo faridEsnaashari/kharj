@@ -7,7 +7,9 @@ import { Op } from 'sequelize';
 import { UnitRepository } from './entities/repositories/unit.repository';
 import { CreateUnitDto } from './dtos/create-unit.dto';
 import { UpdateUnitDto } from './dtos/update-unit.dto';
+import { GetAllUnitDto } from './dtos/get-all-unit.dto';
 import { User } from 'src/user/entities/user.entity';
+import { UserService } from 'src/user/user.service';
 import { AccountRepository } from 'src/account/entities/repositories/account.repository';
 
 @Injectable()
@@ -15,11 +17,17 @@ export class UnitService {
   constructor(
     private unitRepository: UnitRepository,
     private accountRepository: AccountRepository,
+    private userService: UserService,
   ) {}
 
-  async findAllUnits(user: User) {
+  async findAllUnits(query: GetAllUnitDto, user: User) {
+    const targetUserId = await this.userService.resolveTargetUserId(
+      query.userId,
+      user,
+    );
+
     return this.unitRepository.findAll({
-      [Op.or]: [{ userId: null }, { userId: user.id }],
+      [Op.or]: [{ userId: null }, { userId: targetUserId }],
     });
   }
 

@@ -23,6 +23,10 @@ export const getAllAccountsDtoSchema = z.object({
     .string()
     .optional()
     .transform((v) => (v ? +v : undefined)),
+  userId: z
+    .string()
+    .optional()
+    .transform((v) => (v ? +v : undefined)),
 });
 
 export type GetAllAccountsDto = z.infer<typeof getAllAccountsDtoSchema>;

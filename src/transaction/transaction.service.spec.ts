@@ -101,7 +101,11 @@ describe('TransactionService', () => {
   });
 
   it('only queries payments when type is PAYMENT', async () => {
-    const query = { page: 1, size: 20, type: 'PAYMENT' } as GetRecentActivityDto;
+    const query = {
+      page: 1,
+      size: 20,
+      type: 'PAYMENT',
+    } as GetRecentActivityDto;
 
     const result = await service.getRecentActivity(query, user);
 
@@ -121,5 +125,48 @@ describe('TransactionService', () => {
     expect(incomeRepository.count).toHaveBeenCalled();
     expect(paymentRepository.findAll).not.toHaveBeenCalled();
     expect(paymentRepository.count).not.toHaveBeenCalled();
+  });
+
+  it('narrows the account lookup to unitId when provided', async () => {
+    const query = { page: 1, size: 20, unitId: 5 } as GetRecentActivityDto;
+
+    await service.getRecentActivity(query, user);
+
+    expect(accountRepository.findAll).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { userId: 1, unitId: 5 } }),
+    );
+  });
+
+  it('narrows the account lookup to bankId and unitId when both provided', async () => {
+    const query = {
+      page: 1,
+      size: 20,
+      bankId: 3,
+      unitId: 5,
+    } as GetRecentActivityDto;
+
+    await service.getRecentActivity(query, user);
+
+    expect(accountRepository.findAll).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { userId: 1, bankId: 3, unitId: 5 } }),
+    );
+  });
+
+  it('narrows the account lookup to ownedBy when provided', async () => {
+    const query = {
+      page: 1,
+      size: 20,
+      bankId: 3,
+      unitId: 5,
+      ownedBy: 9,
+    } as GetRecentActivityDto;
+
+    await service.getRecentActivity(query, user);
+
+    expect(accountRepository.findAll).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { userId: 1, bankId: 3, unitId: 5, ownedBy: 9 },
+      }),
+    );
   });
 });

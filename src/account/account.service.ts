@@ -9,6 +9,7 @@ import { CreateAccountDto } from './dtos/create-account.dto';
 import { GetAllAccountsDto } from './dtos/get-all-account.dto';
 import { GetAccountStatisticDto } from './dtos/get-account-statistic.dto';
 import { UserRepository } from 'src/user/entities/repositories/user.repository';
+import { UserService } from 'src/user/user.service';
 import { User, UserModel } from 'src/user/entities/user.entity';
 import { UnitRepository } from 'src/unit/entities/repositories/unit.repository';
 import { UnitModel } from 'src/unit/entities/unit.entity';
@@ -28,6 +29,7 @@ export class AccountService {
   constructor(
     private accountRepository: AccountRepository,
     private userRepository: UserRepository,
+    private userService: UserService,
     private unitRepository: UnitRepository,
     private bankRepository: BankRepository,
     private paymentRepository: PaymentRepository,
@@ -35,8 +37,13 @@ export class AccountService {
   ) {}
 
   async findAllAccounts(query: GetAllAccountsDto, user: User) {
+    const targetUserId = await this.userService.resolveTargetUserId(
+      query.userId,
+      user,
+    );
+
     const where: WhereOptions<Account> = {
-      userId: user.id,
+      userId: targetUserId,
       ...(query.ownedBy ? { ownedBy: query.ownedBy } : {}),
       ...(query.bankId ? { bankId: query.bankId } : {}),
       ...(query.unitId ? { unitId: query.unitId } : {}),

@@ -14,6 +14,6 @@ import { UserRelationModel } from './entities/user-relation.entity';
   imports: [SequelizeModule.forFeature([UserModel, UserRelationModel])],
   providers: [UserService, UserRepository, UserRelationRepository],
   controllers: [UserController],
-  exports: [UserRepository],
+  exports: [UserRepository, UserService],
 })
 export class UserModule {}
