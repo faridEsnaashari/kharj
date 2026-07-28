@@ -565,7 +565,10 @@ renders.
 
 ### Testing
 
-Unit tests only (services + logic files). No E2E tests.
+Two layers: unit tests (services + logic files, mocked repositories) and E2E tests (real HTTP
+requests against a real Nest app, real STAGE database).
+
+#### Unit tests
 
 - Test files: `*.spec.ts` co-located with the file under test
 - Services are instantiated directly with `new Service(...mocks)` — no Nest testing module
@@ -580,6 +583,46 @@ npm test -- src/unit/unit.service.spec.ts   # one file
 npm test -- -t "createUnit"                 # by test name
 npm run test:cov                            # with coverage
 ```
+
+#### E2E tests
+
+Live in `test/`, named `*.e2e-spec.ts` (not `*.spec.ts` — a different suffix on purpose, so the
+main Jest config's `testRegex` never picks these up, and vice versa: `test/jest-e2e.json`'s
+`testRegex` only matches `.e2e-spec.ts$`). Run with:
+
+```bash
+npm run test:e2e   # NODE_ENV=develop jest --config ./test/jest-e2e.json
+```
+
+`NODE_ENV=develop` is required — that's what makes `appConfigs.nodeEnv === 'develop'` in
+`database.module.ts`, which is what points the connection at `STAGE_MYSQL_*` instead of the
+production `MYSQL_*` vars (see the STAGE-DB Working Rule above). E2E tests hit the real STAGE
+database — keep them read-only (`GET` requests) unless you've deliberately set up
+seed/transaction-rollback isolation; nothing here does that yet.
+
+- **`src/app.ts`** — `createApp()` (used by `src/main.ts`) now delegates the actual
+  `app.useLogger`/`enableCors`/`useGlobalFilters`/`useGlobalInterceptors` wiring to an exported
+  `configureApp(app)`, so E2E tests can apply the exact same middleware/filter/interceptor stack
+  a real request would go through, without duplicating it or drifting out of sync.
+- **`test/utils/create-test-app.ts`** — `createTestApp()`: the actual Nest E2E pattern —
+  `Test.createTestingModule({ imports: [AppModule] }).compile()` then
+  `moduleFixture.createNestApplication()` + `configureApp(app)` + `app.init()`. No real
+  `NestFactory.create()`/`app.listen()`/TCP port at all — `supertest` talks to
+  `app.getHttpServer()` directly in-process. This is deliberate, not just "the standard way":
+  booting via a raw `NestFactory.create()` inside a Jest worker (as an earlier, now-deleted
+  `src/e2e.spec.ts` attempt did) hit a real `TypeError: Dialect is not a constructor` from
+  Sequelize — a known category of ts-jest/Sequelize module-resolution incompatibility that
+  doesn't reproduce under plain `ts-node` — and NestJS's default bootstrap-failure teardown
+  calls `process.exit(1)` on a fatal error, which kills the whole Jest worker outright (no test
+  failure output, the run just dies). `Test.createTestingModule()` doesn't hit this.
+  `getTestAuthHeader(user?)`: mints a real JWT via `createUserToken` (same signing path
+  `POST /auth/signin` uses) for a known STAGE user — `E2E_TEST_USER` defaults to id `8`/`farid`,
+  overridable via `E2E_TEST_USER_ID`/`E2E_TEST_USER_NAME` env vars — so authenticated-route tests
+  don't need a real plaintext password, just a user row that already exists in STAGE.
+- **`test/app.e2e-spec.ts`** — unauthenticated `GET /`, asserts the response envelope shape.
+- **`test/bank.e2e-spec.ts`** — `GET /bank` without a token (expects `403` from `HasAccessGuard`)
+  and with a minted token (expects `200` + real bank rows) — the template for testing any other
+  guarded route.
 
 ### Running the Backend
 

@@ -1,8 +1,8 @@
 import { Module } from '@nestjs/common';
 import { SequelizeModule } from '@nestjs/sequelize';
-import { databaseConfig } from './sequelize-cli.config';
 import { appConfigs } from 'src/app.configs';
 import { DatabaseConnectionLogger } from './database-connection.logger';
+import { databaseConfig } from './database.config';
 
 @Module({
   imports: [
