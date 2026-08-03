@@ -25,6 +25,7 @@ import { UncompletePaymentRepository } from 'src/uncomplete-payment/entities/rep
 import { Paginated } from 'src/common/types/pagination.type';
 import { BankModel } from 'src/bank/entities/bank.entity';
 import { UnitModel } from 'src/unit/entities/unit.entity';
+import { Sequelize } from 'sequelize-typescript';
 
 @Injectable()
 export class PaymentService {
@@ -33,6 +34,7 @@ export class PaymentService {
     private uncompletePaymentRepository: UncompletePaymentRepository,
     private accountRepository: AccountRepository,
     private accountDebtRepository: AccountDebtRepository,
+    private seq: Sequelize,
   ) {}
 
   async getAllPayments(
@@ -213,5 +215,51 @@ export class PaymentService {
     await this.paymentRepository.updateOneById(paymentUpdate, id);
 
     return this.paymentRepository.findOneByIdOrFail(id);
+  }
+
+  async deletePayment(id: number, user: User): Promise<number> {
+    const dbTransaction = await this.seq.transaction();
+
+    try {
+      const payment = await this.paymentRepository.findOneOrFail(
+        {
+          where: { id },
+          include: [
+            {
+              model: AccountModel,
+              as: 'account',
+              where: { userId: user.id },
+              required: true,
+            },
+          ],
+        },
+        dbTransaction,
+      );
+
+      const restored = restoreBalance(payment.account.ballance, payment.amount);
+
+      await this.accountRepository.updateOneById(
+        { ballance: restored },
+        payment.accountId,
+        dbTransaction,
+      );
+
+      await this.accountDebtRepository.delete(
+        { where: { paymentId: id } },
+        dbTransaction,
+      );
+
+      const result = await this.paymentRepository.delete(
+        { where: { id } },
+        dbTransaction,
+      );
+
+      await dbTransaction.commit();
+
+      return result;
+    } catch (err) {
+      await dbTransaction.rollback();
+      throw err;
+    }
   }
 }

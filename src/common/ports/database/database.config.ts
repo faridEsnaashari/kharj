@@ -11,6 +11,7 @@ export const databaseConfig = {
       typeCast: process.env.DB_TYPE_CAST !== 'false',
       dateStrings: process.env.DB_DATE_STRINGS !== 'false',
     },
+    logging: process.env.DB_LOGGING !== 'false',
   },
   test: {
     host: process.env.MYSQL_HOST || 'localhost',
@@ -24,6 +25,7 @@ export const databaseConfig = {
       typeCast: process.env.DB_TYPE_CAST !== 'false',
       dateStrings: process.env.DB_DATE_STRINGS !== 'false',
     },
+    logging: process.env.DB_LOGGING !== 'false',
   },
   production: {
     host: process.env.MYSQL_HOST || 'localhost',
@@ -37,5 +39,6 @@ export const databaseConfig = {
       typeCast: process.env.DB_TYPE_CAST !== 'false',
       dateStrings: process.env.DB_DATE_STRINGS !== 'false',
     },
+    logging: process.env.DB_LOGGING !== 'false',
   },
 };

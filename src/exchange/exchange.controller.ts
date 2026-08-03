@@ -1,6 +1,8 @@
 import {
   Body,
   Controller,
+  Delete,
+  Param,
   Post,
   Req,
   UseGuards,
@@ -27,5 +29,11 @@ export class ExchangeController {
     @Body() dto: CreateExchangeDto,
   ) {
     return this.exchangeService.createExchange(dto, req.user);
+  }
+
+  @Delete(':id')
+  @UseGuards(HasAccessGuard)
+  async deleteExchange(@Param('id') id: number, @Req() req: { user: User }) {
+    return this.exchangeService.deleteExchange(id, req.user);
   }
 }

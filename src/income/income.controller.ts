@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Post,
@@ -60,5 +61,10 @@ export class IncomeController {
     @Body() dto: UpdateIncomeDto,
   ) {
     return this.incomeService.updateIncome(id, dto, req.user);
+  }
+
+  @Delete(':id')
+  async deleteIncome(@Param('id') id: number, @Req() req: { user: User }) {
+    return this.incomeService.deleteIncome(id, req.user);
   }
 }

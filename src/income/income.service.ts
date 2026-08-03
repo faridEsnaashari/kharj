@@ -11,12 +11,14 @@ import { Income, UpdateIncome } from './entities/income.entity';
 import { BankModel } from 'src/bank/entities/bank.entity';
 import { UnitModel } from 'src/unit/entities/unit.entity';
 import { calculateUpdatedBalance } from './logics/income.logic';
+import { Sequelize } from 'sequelize-typescript';
 
 @Injectable()
 export class IncomeService {
   constructor(
     private incomeRepository: IncomeRepository,
     private accountRepository: AccountRepository,
+    private seq: Sequelize,
   ) {}
 
   async findOneIncome(id: number) {
@@ -76,17 +78,32 @@ export class IncomeService {
       where: { id: dto.accountId, userId: user.id },
     });
 
-    const newBalance = account.ballance + dto.amount;
+    const dbTransaction = await this.seq.transaction();
 
-    await this.incomeRepository.create({
-      ...dto,
-      remain: newBalance,
-    });
+    try {
+      const newBalance = account.ballance + dto.amount;
 
-    return this.accountRepository.updateOneById(
-      { ballance: newBalance },
-      account.id,
-    );
+      await this.accountRepository.updateOneById(
+        { ballance: newBalance },
+        account.id,
+        dbTransaction,
+      );
+
+      const result = await this.incomeRepository.create(
+        {
+          ...dto,
+          remain: newBalance,
+        },
+        dbTransaction,
+      );
+
+      await dbTransaction.commit();
+
+      return result;
+    } catch (err) {
+      await dbTransaction.rollback();
+      throw err;
+    }
   }
 
   async updateIncome(id: number, dto: UpdateIncomeDto, user: User) {
@@ -124,5 +141,48 @@ export class IncomeService {
     await this.incomeRepository.updateOneById(incomeUpdate, id);
 
     return this.incomeRepository.findOneByIdOrFail(id);
+  }
+
+  async deleteIncome(id: number, user: User) {
+    const dbTransaction = await this.seq.transaction();
+
+    try {
+      const income = await this.incomeRepository.findOneOrFail(
+        {
+          where: {
+            id,
+          },
+          include: [
+            {
+              model: AccountModel,
+              as: 'account',
+              where: { userId: user.id },
+              required: true,
+            },
+          ],
+        },
+        dbTransaction,
+      );
+
+      await this.accountRepository.update(
+        {
+          ballance: income.account.ballance - income.amount,
+        },
+        { id: income.accountId },
+        dbTransaction,
+      );
+
+      const result = await this.incomeRepository.delete(
+        { where: { id } },
+        dbTransaction,
+      );
+
+      await dbTransaction.commit();
+
+      return result;
+    } catch (err) {
+      await dbTransaction.rollback();
+      throw err;
+    }
   }
 }

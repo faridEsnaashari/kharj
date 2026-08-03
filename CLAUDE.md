@@ -226,8 +226,12 @@ src/
 │   ├── debt.controller.ts
 │   ├── debt.service.ts
 │   ├── debt.module.ts
-│   └── dtos/
-│       └── get-all-debt.dto.ts
+│   ├── dtos/
+│   │   ├── get-all-debt.dto.ts
+│   │   └── get-debt-summary.dto.ts
+│   └── logics/
+│       ├── debt.logic.ts               groupDebts, netDebtGroups, buildDebtSummary
+│       └── debt.logic.type.ts
 ├── transaction/
 │   ├── transaction.controller.ts
 │   ├── transaction.service.ts
@@ -526,6 +530,46 @@ The frontend (`features/dashboard/hooks/useDashboard.js`) calls both in
 parallel and merges them client-side into the combined shape `UnitCard`
 renders.
 
+#### Debts (read-only — there is no create-debt endpoint)
+
+`AccountDebt` rows are only ever created as a side effect of payment allocation
+(see Payment Allocation Logic above) — the Debt module exists purely to list
+and summarize them. Both endpoints scope to debts the requesting user is part
+of (`Op.or: [{fromUserId: user.id}, {toUserId: user.id}]`) and narrow by the
+underlying payment's account via the same `bankId`/`unitId` `accountWhere`
+pattern used elsewhere (`DebtService.buildDebtInclude`, shared by both
+methods).
+
+- `GET /debt` — paginated, ungrouped list, ordered `createdAt` DESC. Filters:
+  `fromUserId`, `toUserId` (each ANDed on top of the self-involvement scope,
+  so passing one picks a specific direction), `bankId`, `unitId`.
+- `GET /debt/summary` — grouped and netted. `DebtService.getDebtSummary`
+  fetches *all* matching `AccountDebt` rows (no pagination — grouping needs
+  the full set) via the same include tree, then hands them to
+  `debt/logics/debt.logic.ts`, which is pure/framework-free like every other
+  `logics/` file:
+  - `groupDebts(rows, groupBy)` — sums `amount` per
+    `(bank?, unit, fromUserId, toUserId)` key. `groupBy: 'bank'` keys on
+    bank+unit (finer); `groupBy: 'unit'` drops bank from the key, collapsing
+    debts across banks for the same unit (coarser). Query param
+    `groupBy` (`GetDebtSummaryDto`), default `'bank'`.
+  - `netDebtGroups(groups)` — for each `(bank?, unit)` and unordered user
+    pair, nets the forward group's amount against its reverse-direction
+    mirror (`amount - reverseAmount`) and emits **one** row in whichever
+    direction the net lands (flips `from`/`to` if the reverse side was
+    larger); a pair that nets to exactly `0` is dropped entirely rather than
+    emitted as a zero-amount row.
+  - `buildDebtSummary` combines both and also returns `totals: {owedToYou,
+    youOwe}` — summed straight off the netted rows from the current user's
+    perspective — plus the netted rows sorted by `amount` descending.
+  - Old-schema note: this replaces raw SQL the user had written against the
+    pre-rewrite database, which read `a.unit`/`a.bank` as plain columns
+    directly on `accounts`. The current schema normalizes those into
+    `Bank`/`Unit` entities reached via `accounts.bankId`/`accounts.unitId`
+    foreign keys (same hybrid model as elsewhere) — `buildDebtInclude`'s
+    `payment → account → bank`/`unit` include chain is the up-to-date
+    equivalent of that join.
+
 ### API Reference
 
 | Method | Route                          | Description                                                                                     |
@@ -555,7 +599,8 @@ renders.
 | POST   | `/income`                      | Create income                                                                                   |
 | PUT    | `/income/:id`                  | Update income (reverses + re-applies)                                                           |
 | POST   | `/exchange`                    | Transfer between accounts (destination can be managed by a different related user via `toUser`) |
-| GET    | `/debt`                        | List debts (filters: fromUserId, toUserId, bankId, unitId)                                      |
+| GET    | `/debt`                        | List debts, paginated (filters: fromUserId, toUserId, bankId, unitId)                           |
+| GET    | `/debt/summary`                | Grouped + netted debt totals (filters: groupBy=`bank`\|`unit`, bankId, unitId)                  |
 | GET    | `/transaction/recent-activity` | Merged payment+income feed (filters: `type` = `PAYMENT`\|`INCOME`, `bankId`, `unitId`, `ownedBy`) |
 | GET    | `/uncomplete-payments`         | List pending imports (filters: bankId), includes account/bank/unit                              |
 | POST   | `/uncomplete-payments/text`    | Parse SMS text into a pending import                                                             |

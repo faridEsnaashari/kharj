@@ -157,4 +157,10 @@ export class AccountService {
 
     return this.accountRepository.create({ ...dto, userId: user.id });
   }
+
+  async deleteAccount(id: Account['id'], user: User) {
+    return this.accountRepository.delete({
+      where: { id, userId: user.id },
+    });
+  }
 }

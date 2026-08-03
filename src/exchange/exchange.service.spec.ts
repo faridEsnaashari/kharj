@@ -11,10 +11,15 @@ import {
   createMockRepository,
   MockRepository,
 } from 'src/common/test-utils/mock-repository';
+import {
+  createMockSequelize,
+  MockSequelize,
+} from 'src/common/test-utils/mock-sequelize';
 import { User } from 'src/user/entities/user.entity';
 import { CreateExchangeDto } from './dtos/create-exchange.dto';
 import { PaymentCategory } from 'src/payment/enums/payment-category.enum';
 import { IncomeCategory } from 'src/income/enums/income-category.enum';
+import { Sequelize } from 'sequelize-typescript';
 
 describe('ExchangeService', () => {
   let service: ExchangeService;
@@ -22,6 +27,7 @@ describe('ExchangeService', () => {
   let paymentRepository: MockRepository;
   let incomeRepository: MockRepository;
   let accountRepository: MockRepository;
+  let seq: MockSequelize;
   const user = { id: 1 } as User;
 
   const dto: CreateExchangeDto = {
@@ -38,12 +44,14 @@ describe('ExchangeService', () => {
     paymentRepository = createMockRepository();
     incomeRepository = createMockRepository();
     accountRepository = createMockRepository();
+    seq = createMockSequelize();
 
     service = new ExchangeService(
       exchangeRepository as unknown as ExchangeRepository,
       paymentRepository as unknown as PaymentRepository,
       incomeRepository as unknown as IncomeRepository,
       accountRepository as unknown as AccountRepository,
+      seq as unknown as Sequelize,
     );
   });
 
@@ -126,6 +134,89 @@ describe('ExchangeService', () => {
       incomeId: 22,
       fromAmount: 100,
       toAmount: 90,
+    });
+  });
+
+  describe('deleteExchange', () => {
+    function mockExchange(overrides: Record<string, unknown> = {}) {
+      exchangeRepository.findOneOrFail.mockResolvedValue({
+        id: 33,
+        paymentId: 11,
+        incomeId: 22,
+        fromAmount: 100,
+        toAmount: 90,
+        payment: { account: { id: 1, userId: user.id, ballance: 400 } },
+        income: { account: { id: 2, ballance: 290 } },
+        ...overrides,
+      });
+    }
+
+    beforeEach(() => {
+      accountRepository.updateOneById.mockResolvedValue(undefined);
+      exchangeRepository.delete.mockResolvedValue(1);
+      paymentRepository.delete.mockResolvedValue(1);
+      incomeRepository.delete.mockResolvedValue(1);
+    });
+
+    it('reverses the balance moved on both accounts', async () => {
+      mockExchange();
+      const dbTransaction = await seq.transaction();
+
+      await service.deleteExchange(33, user);
+
+      expect(accountRepository.updateOneById).toHaveBeenCalledWith(
+        { ballance: 500 },
+        1,
+        dbTransaction,
+      );
+      expect(accountRepository.updateOneById).toHaveBeenCalledWith(
+        { ballance: 200 },
+        2,
+        dbTransaction,
+      );
+    });
+
+    it('deletes the exchange, payment and income records', async () => {
+      mockExchange();
+      const dbTransaction = await seq.transaction();
+
+      await service.deleteExchange(33, user);
+
+      expect(exchangeRepository.delete).toHaveBeenCalledWith(
+        { where: { id: 33 } },
+        dbTransaction,
+      );
+      expect(paymentRepository.delete).toHaveBeenCalledWith(
+        { where: { id: 11 } },
+        dbTransaction,
+      );
+      expect(incomeRepository.delete).toHaveBeenCalledWith(
+        { where: { id: 22 } },
+        dbTransaction,
+      );
+    });
+
+    it('throws NotFoundException when the caller does not own the source account', async () => {
+      mockExchange({
+        payment: { account: { id: 1, userId: 999, ballance: 400 } },
+      });
+
+      await expect(service.deleteExchange(33, user)).rejects.toThrow(
+        NotFoundException,
+      );
+      expect(accountRepository.updateOneById).not.toHaveBeenCalled();
+    });
+
+    it('rolls back the transaction when the exchange cannot be found', async () => {
+      const dbTransaction = await seq.transaction();
+      exchangeRepository.findOneOrFail.mockRejectedValue(
+        new NotFoundException('not found'),
+      );
+
+      await expect(service.deleteExchange(33, user)).rejects.toThrow(
+        NotFoundException,
+      );
+      expect(dbTransaction.rollback).toHaveBeenCalled();
     });
   });
 });

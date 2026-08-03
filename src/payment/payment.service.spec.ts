@@ -11,12 +11,17 @@ import {
   createMockRepository,
   MockRepository,
 } from 'src/common/test-utils/mock-repository';
+import {
+  createMockSequelize,
+  MockSequelize,
+} from 'src/common/test-utils/mock-sequelize';
 import { User } from 'src/user/entities/user.entity';
 import { Account } from 'src/account/entities/account.entity';
 import { CreatePaymentDto } from './dtos/craete-payment.dto';
 import { UpdatePaymentDto } from './dtos/update-payment.dto';
 import { GetAllPaymentsDto } from './dtos/get-all-payment.dto';
 import { PaymentCategory } from './enums/payment-category.enum';
+import { Sequelize } from 'sequelize-typescript';
 
 function buildAccount(overrides: Partial<Account>): Account {
   return {
@@ -37,6 +42,7 @@ describe('PaymentService', () => {
   let uncompletePaymentRepository: MockRepository;
   let accountRepository: MockRepository;
   let accountDebptRepository: MockRepository;
+  let seq: MockSequelize;
   const user = { id: 1 } as User;
 
   const baseDto: CreatePaymentDto = {
@@ -55,12 +61,14 @@ describe('PaymentService', () => {
     uncompletePaymentRepository = createMockRepository();
     accountRepository = createMockRepository();
     accountDebptRepository = createMockRepository();
+    seq = createMockSequelize();
 
     service = new PaymentService(
       paymentRepository as unknown as PaymentRepository,
       uncompletePaymentRepository as unknown as UncompletePaymentRepository,
       accountRepository as unknown as AccountRepository,
       accountDebptRepository as unknown as AccountDebtRepository,
+      seq as unknown as Sequelize,
     );
 
     paymentRepository.create.mockImplementation((data) =>
@@ -259,6 +267,69 @@ describe('PaymentService', () => {
       await expect(service.updatePayment(7, updateDto, user)).resolves.toEqual({
         id: 7,
       });
+    });
+  });
+
+  describe('deletePayment', () => {
+    beforeEach(() => {
+      paymentRepository.findOneOrFail.mockResolvedValue({
+        id: 7,
+        accountId: 5,
+        amount: 100,
+        account: { ballance: 300 },
+      });
+      paymentRepository.delete.mockResolvedValue(1);
+      accountDebptRepository.delete.mockResolvedValue(0);
+    });
+
+    it('restores the balance the payment had deducted', async () => {
+      const dbTransaction = await seq.transaction();
+
+      await service.deletePayment(7, user);
+
+      expect(accountRepository.updateOneById).toHaveBeenCalledWith(
+        { ballance: 400 },
+        5,
+        dbTransaction,
+      );
+    });
+
+    it('removes any debt tied to this payment before deleting it', async () => {
+      const dbTransaction = await seq.transaction();
+
+      await service.deletePayment(7, user);
+
+      expect(accountDebptRepository.delete).toHaveBeenCalledWith(
+        { where: { paymentId: 7 } },
+        dbTransaction,
+      );
+      expect(paymentRepository.delete).toHaveBeenCalledWith(
+        { where: { id: 7 } },
+        dbTransaction,
+      );
+    });
+
+    it('only touches payments owned by the requesting user', async () => {
+      await service.deletePayment(7, user);
+
+      const findArgs = paymentRepository.findOneOrFail.mock
+        .calls[0][0] as unknown as {
+        include: Array<{ where: { userId: number } }>;
+      };
+
+      expect(findArgs.include[0].where).toEqual({ userId: 1 });
+    });
+
+    it('rolls back the transaction when the payment cannot be found', async () => {
+      const dbTransaction = await seq.transaction();
+      paymentRepository.findOneOrFail.mockRejectedValue(
+        new NotFoundException('not found'),
+      );
+
+      await expect(service.deletePayment(7, user)).rejects.toThrow(
+        NotFoundException,
+      );
+      expect(dbTransaction.rollback).toHaveBeenCalled();
     });
   });
 });

@@ -5,16 +5,22 @@ import {
   createMockRepository,
   MockRepository,
 } from 'src/common/test-utils/mock-repository';
+import {
+  createMockSequelize,
+  MockSequelize,
+} from 'src/common/test-utils/mock-sequelize';
 import { User } from 'src/user/entities/user.entity';
 import { CreateIncomeDto } from './dtos/create-income.dto';
 import { UpdateIncomeDto } from './dtos/update-income.dto';
 import { GetAllIncomeDto } from './dtos/get-all-income.dto';
 import { IncomeCategory } from './enums/income-category.enum';
+import { Sequelize } from 'sequelize-typescript';
 
 describe('IncomeService', () => {
   let service: IncomeService;
   let incomeRepository: MockRepository;
   let accountRepository: MockRepository;
+  let seq: MockSequelize;
   const user = { id: 1 } as User;
 
   const dto: CreateIncomeDto = {
@@ -27,10 +33,12 @@ describe('IncomeService', () => {
   beforeEach(() => {
     incomeRepository = createMockRepository();
     accountRepository = createMockRepository();
+    seq = createMockSequelize();
 
     service = new IncomeService(
       incomeRepository as unknown as IncomeRepository,
       accountRepository as unknown as AccountRepository,
+      seq as unknown as Sequelize,
     );
   });
 
@@ -44,17 +52,23 @@ describe('IncomeService', () => {
 
     await service.createIncome(dto, user);
 
+    const dbTransaction = await seq.transaction();
+
     expect(accountRepository.findOneOrFail).toHaveBeenCalledWith({
       where: { id: 5, userId: user.id },
     });
-    expect(incomeRepository.create).toHaveBeenCalledWith({
-      ...dto,
-      accountId: 5,
-      remain: 500,
-    });
+    expect(incomeRepository.create).toHaveBeenCalledWith(
+      {
+        ...dto,
+        accountId: 5,
+        remain: 500,
+      },
+      dbTransaction,
+    );
     expect(accountRepository.updateOneById).toHaveBeenCalledWith(
       { ballance: 500 },
       5,
+      dbTransaction,
     );
   });
 

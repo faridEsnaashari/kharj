@@ -12,4 +12,10 @@ export class AuthController {
   async signin(@Body() signinDto: SigninDto) {
     return this.authService.signin(signinDto);
   }
+
+  @UsePipes(new ZodValidationPipe(signinDtoSchema))
+  @Post('signup')
+  async signup(@Body() signinDto: SigninDto) {
+    return this.authService.signup(signinDto);
+  }
 }

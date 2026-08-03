@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Post,
@@ -70,5 +71,10 @@ export class AccountController {
     @Body() dto: CreateAccountDto,
   ) {
     return this.accountService.createAccount(dto, req.user);
+  }
+
+  @Delete(':id')
+  async deleteAccount(@Param('id') id: number, @Req() req: { user: User }) {
+    return this.accountService.deleteAccount(id, req.user);
   }
 }

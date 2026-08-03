@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Post,
@@ -58,5 +59,10 @@ export class PaymentController {
     @Body() dto: UpdatePaymentDto,
   ) {
     return this.paymentService.updatePayment(id, dto, req.user);
+  }
+
+  @Delete(':id')
+  async deletePayment(@Param('id') id: number, @Req() req: { user: User }) {
+    return this.paymentService.deletePayment(id, req.user);
   }
 }

@@ -8,6 +8,10 @@ import { databaseConfig } from './database.config';
   imports: [
     SequelizeModule.forRoot({
       dialect: 'mysql',
+      logging:
+        appConfigs.nodeEnv === 'develop'
+          ? databaseConfig.development.logging
+          : databaseConfig.production.logging,
       timezone:
         appConfigs.nodeEnv === 'develop'
           ? databaseConfig.development.timezone
