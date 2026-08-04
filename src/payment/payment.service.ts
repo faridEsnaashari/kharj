@@ -124,43 +124,59 @@ export class PaymentService {
       throw new UnprocessableEntityException('insufficient-balance');
     }
 
-    await Promise.all(
-      selectedAccounts.map((acc) =>
-        this.accountRepository.updateOneById(
-          { ballance: acc.ballance },
-          acc.id,
+    const dbTransaction = await this.seq.transaction();
+
+    try {
+      await Promise.all(
+        selectedAccounts.map((acc) =>
+          this.accountRepository.updateOneById(
+            { ballance: acc.ballance },
+            acc.id,
+            dbTransaction,
+          ),
         ),
-      ),
-    );
+      );
 
-    const payments = await Promise.all(
-      selectedAccounts.map(async (acc) => {
-        const payment = await this.paymentRepository.create({
-          accountId: acc.id,
-          amount: acc.minus,
-          remain: acc.ballance,
-          category: dto.category,
-          description: dto.description,
-          isFun: dto.isFun,
-          isMaman: dto.isMaman,
-          paidAt: dto.paidAt,
-          uncompletePaymentId: dto.uncompletePaymentId,
-        });
+      const payments = await Promise.all(
+        selectedAccounts.map(async (acc) => {
+          const payment = await this.paymentRepository.create(
+            {
+              accountId: acc.id,
+              amount: acc.minus,
+              remain: acc.ballance,
+              category: dto.category,
+              description: dto.description,
+              isFun: dto.isFun,
+              isMaman: dto.isMaman,
+              paidAt: dto.paidAt,
+              uncompletePaymentId: dto.uncompletePaymentId,
+            },
+            dbTransaction,
+          );
 
-        if (acc.ownedBy !== targetUserId) {
-          await this.accountDebtRepository.create({
-            amount: acc.minus,
-            paymentId: payment.id,
-            fromUserId: acc.ownedBy,
-            toUserId: targetUserId,
-          });
-        }
+          if (acc.ownedBy !== targetUserId) {
+            await this.accountDebtRepository.create(
+              {
+                amount: acc.minus,
+                paymentId: payment.id,
+                fromUserId: acc.ownedBy,
+                toUserId: targetUserId,
+              },
+              dbTransaction,
+            );
+          }
 
-        return payment;
-      }),
-    );
+          return payment;
+        }),
+      );
 
-    return payments;
+      await dbTransaction.commit();
+
+      return payments;
+    } catch (err) {
+      await dbTransaction.rollback();
+      throw err;
+    }
   }
 
   async updatePayment(
@@ -188,31 +204,50 @@ export class PaymentService {
 
     const newBalance = deductBalance(restored, dto.price);
 
-    await this.accountRepository.updateOneById(
-      { ballance: newBalance },
-      payment.accountId,
-    );
+    const dbTransaction = await this.seq.transaction();
 
-    const debt = await this.accountDebtRepository.findOne({
-      where: { paymentId: id },
-    });
+    try {
+      await this.accountRepository.updateOneById(
+        { ballance: newBalance },
+        payment.accountId,
+        dbTransaction,
+      );
 
-    if (debt) {
-      const debtUpdate: UpdateAccountDebt = { amount: dto.price };
-      await this.accountDebtRepository.updateOneById(debtUpdate, debt.id);
+      const debt = await this.accountDebtRepository.findOne(
+        { where: { paymentId: id } },
+        dbTransaction,
+      );
+
+      if (debt) {
+        const debtUpdate: UpdateAccountDebt = { amount: dto.price };
+        await this.accountDebtRepository.updateOneById(
+          debtUpdate,
+          debt.id,
+          dbTransaction,
+        );
+      }
+
+      const paymentUpdate: UpdatePayment = {
+        amount: dto.price,
+        remain: newBalance,
+        category: dto.category,
+        description: dto.description,
+        isFun: dto.isFun,
+        isMaman: dto.isMaman,
+        paidAt: dto.paidAt,
+      };
+
+      await this.paymentRepository.updateOneById(
+        paymentUpdate,
+        id,
+        dbTransaction,
+      );
+
+      await dbTransaction.commit();
+    } catch (err) {
+      await dbTransaction.rollback();
+      throw err;
     }
-
-    const paymentUpdate: UpdatePayment = {
-      amount: dto.price,
-      remain: newBalance,
-      category: dto.category,
-      description: dto.description,
-      isFun: dto.isFun,
-      isMaman: dto.isMaman,
-      paidAt: dto.paidAt,
-    };
-
-    await this.paymentRepository.updateOneById(paymentUpdate, id);
 
     return this.paymentRepository.findOneByIdOrFail(id);
   }

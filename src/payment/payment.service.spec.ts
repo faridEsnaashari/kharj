@@ -127,10 +127,13 @@ describe('PaymentService', () => {
       user,
     );
 
+    const dbTransaction = await seq.transaction();
+
     expect(result).toHaveLength(1);
     expect(accountRepository.updateOneById).toHaveBeenCalledWith(
       { ballance: 400 },
       1,
+      dbTransaction,
     );
     expect(accountDebptRepository.create).not.toHaveBeenCalled();
   });
@@ -143,12 +146,17 @@ describe('PaymentService', () => {
 
     await service.createPayment({ ...baseDto, price: 100, ownerId: 1 }, user);
 
-    expect(accountDebptRepository.create).toHaveBeenCalledWith({
-      amount: 100,
-      paymentId: expect.any(Number),
-      fromUserId: 2,
-      toUserId: 1,
-    });
+    const dbTransaction = await seq.transaction();
+
+    expect(accountDebptRepository.create).toHaveBeenCalledWith(
+      {
+        amount: 100,
+        paymentId: expect.any(Number),
+        fromUserId: 2,
+        toUserId: 1,
+      },
+      dbTransaction,
+    );
   });
 
   it('getAllPayments resolves the user account ids and filters payments by them', async () => {
@@ -221,19 +229,25 @@ describe('PaymentService', () => {
     it('reverses the original amount before applying the new price', async () => {
       await service.updatePayment(7, updateDto, user);
 
+      const dbTransaction = await seq.transaction();
+
       // 300 + 100 (restore) - 250 (new price) = 150
       expect(accountRepository.updateOneById).toHaveBeenCalledWith(
         { ballance: 150 },
         5,
+        dbTransaction,
       );
     });
 
     it('persists the new price and running balance on the payment', async () => {
       await service.updatePayment(7, updateDto, user);
 
+      const dbTransaction = await seq.transaction();
+
       expect(paymentRepository.updateOneById).toHaveBeenCalledWith(
         expect.objectContaining({ amount: 250, remain: 150 }),
         7,
+        dbTransaction,
       );
     });
 
@@ -251,9 +265,12 @@ describe('PaymentService', () => {
 
       await service.updatePayment(7, updateDto, user);
 
+      const dbTransaction = await seq.transaction();
+
       expect(accountDebptRepository.updateOneById).toHaveBeenCalledWith(
         { amount: 250 },
         3,
+        dbTransaction,
       );
     });
 
