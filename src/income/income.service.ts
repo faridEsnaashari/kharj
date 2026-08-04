@@ -125,20 +125,34 @@ export class IncomeService {
       dto.amount,
     );
 
-    await this.accountRepository.updateOneById(
-      { ballance: newBalance },
-      income.accountId,
-    );
+    const dbTransaction = await this.seq.transaction();
 
-    const incomeUpdate: UpdateIncome = {
-      amount: dto.amount,
-      remain: newBalance,
-      category: dto.category,
-      description: dto.description,
-      paidAt: dto.paidAt,
-    };
+    try {
+      await this.accountRepository.updateOneById(
+        { ballance: newBalance },
+        income.accountId,
+        dbTransaction,
+      );
 
-    await this.incomeRepository.updateOneById(incomeUpdate, id);
+      const incomeUpdate: UpdateIncome = {
+        amount: dto.amount,
+        remain: newBalance,
+        category: dto.category,
+        description: dto.description,
+        paidAt: dto.paidAt,
+      };
+
+      await this.incomeRepository.updateOneById(
+        incomeUpdate,
+        id,
+        dbTransaction,
+      );
+
+      await dbTransaction.commit();
+    } catch (err) {
+      await dbTransaction.rollback();
+      throw err;
+    }
 
     return this.incomeRepository.findOneByIdOrFail(id);
   }

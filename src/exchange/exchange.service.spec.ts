@@ -107,13 +107,17 @@ describe('ExchangeService', () => {
 
     await service.createExchange(dto, user);
 
+    const dbTransaction = await seq.transaction();
+
     expect(accountRepository.updateOneById).toHaveBeenCalledWith(
       { ballance: 400 },
       1,
+      dbTransaction,
     );
     expect(accountRepository.updateOneById).toHaveBeenCalledWith(
       { ballance: 290 },
       2,
+      dbTransaction,
     );
     expect(paymentRepository.create).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -121,6 +125,7 @@ describe('ExchangeService', () => {
         amount: 100,
         category: PaymentCategory.EXCHANGE,
       }),
+      dbTransaction,
     );
     expect(incomeRepository.create).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -128,13 +133,17 @@ describe('ExchangeService', () => {
         amount: 90,
         category: IncomeCategory.EXCHANGE,
       }),
+      dbTransaction,
     );
-    expect(exchangeRepository.create).toHaveBeenCalledWith({
-      paymentId: 11,
-      incomeId: 22,
-      fromAmount: 100,
-      toAmount: 90,
-    });
+    expect(exchangeRepository.create).toHaveBeenCalledWith(
+      {
+        paymentId: 11,
+        incomeId: 22,
+        fromAmount: 100,
+        toAmount: 90,
+      },
+      dbTransaction,
+    );
   });
 
   describe('deleteExchange', () => {

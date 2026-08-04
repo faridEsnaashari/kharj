@@ -146,15 +146,20 @@ describe('IncomeService', () => {
     it('reverses the original amount and applies the new one to the account', async () => {
       await service.updateIncome(9, updateDto, user);
 
+      const dbTransaction = await seq.transaction();
+
       // 300 - 100 (original) + 150 (new) = 350
       expect(accountRepository.updateOneById).toHaveBeenCalledWith(
         { ballance: 350 },
         5,
+        dbTransaction,
       );
     });
 
     it('persists the new amount and running balance on the income', async () => {
       await service.updateIncome(9, updateDto, user);
+
+      const dbTransaction = await seq.transaction();
 
       expect(incomeRepository.updateOneById).toHaveBeenCalledWith(
         {
@@ -165,6 +170,7 @@ describe('IncomeService', () => {
           paidAt: updateDto.paidAt,
         },
         9,
+        dbTransaction,
       );
     });
 

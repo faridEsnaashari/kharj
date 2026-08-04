@@ -48,39 +48,61 @@ export class ExchangeService {
       throw new UnprocessableEntityException('not enugh money');
     }
 
-    await this.accountRepository.updateOneById(
-      { ballance: fromAcc.ballance - fromAmount },
-      fromAcc.id,
-    );
-    await this.accountRepository.updateOneById(
-      { ballance: toAcc.ballance + toAmount },
-      toAcc.id,
-    );
+    const dbTransaction = await this.seq.transaction();
 
-    const payment = await this.paymentRepository.create({
-      accountId: fromAcc.id,
-      amount: fromAmount,
-      remain: fromAcc.ballance - fromAmount,
-      category: PaymentCategory.EXCHANGE,
-      isMaman: false,
-      isFun: false,
-      paidAt,
-    });
+    try {
+      await this.accountRepository.updateOneById(
+        { ballance: fromAcc.ballance - fromAmount },
+        fromAcc.id,
+        dbTransaction,
+      );
+      await this.accountRepository.updateOneById(
+        { ballance: toAcc.ballance + toAmount },
+        toAcc.id,
+        dbTransaction,
+      );
 
-    const income = await this.incomeRepository.create({
-      accountId: toAcc.id,
-      remain: toAcc.ballance + toAmount,
-      amount: toAmount,
-      category: IncomeCategory.EXCHANGE,
-      paidAt,
-    });
+      const payment = await this.paymentRepository.create(
+        {
+          accountId: fromAcc.id,
+          amount: fromAmount,
+          remain: fromAcc.ballance - fromAmount,
+          category: PaymentCategory.EXCHANGE,
+          isMaman: false,
+          isFun: false,
+          paidAt,
+        },
+        dbTransaction,
+      );
 
-    return this.exchangeRepository.create({
-      paymentId: payment.id,
-      incomeId: income.id,
-      fromAmount,
-      toAmount,
-    });
+      const income = await this.incomeRepository.create(
+        {
+          accountId: toAcc.id,
+          remain: toAcc.ballance + toAmount,
+          amount: toAmount,
+          category: IncomeCategory.EXCHANGE,
+          paidAt,
+        },
+        dbTransaction,
+      );
+
+      const result = await this.exchangeRepository.create(
+        {
+          paymentId: payment.id,
+          incomeId: income.id,
+          fromAmount,
+          toAmount,
+        },
+        dbTransaction,
+      );
+
+      await dbTransaction.commit();
+
+      return result;
+    } catch (err) {
+      await dbTransaction.rollback();
+      throw err;
+    }
   }
 
   async deleteExchange(id: number, user: User) {
