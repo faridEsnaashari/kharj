@@ -6,4 +6,8 @@ export enum Unit {
   TALA_ROB = 'TALA_ROB',
   RENT = 'RENT',
   AYAR = 'AYAR',
+  HAMI = 'HAMI',
+  VFIROOZEH = 'VFIROOZEH',
+  TADIKO = 'TADIKO',
+  PARIZ = 'PARIZ',
 }
