@@ -33,6 +33,11 @@ import {
 export class IncomeController {
   constructor(private incomeService: IncomeService) {}
 
+  @Get('categories')
+  getIncomeCategories() {
+    return this.incomeService.getIncomeCategories();
+  }
+
   @Get()
   @UsePipes(new ZodValidationPipe(getAllIncomeDtoSchema))
   async getAllIncomes(

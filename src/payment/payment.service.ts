@@ -26,6 +26,7 @@ import { Paginated } from 'src/common/types/pagination.type';
 import { BankModel } from 'src/bank/entities/bank.entity';
 import { UnitModel } from 'src/unit/entities/unit.entity';
 import { Sequelize } from 'sequelize-typescript';
+import { getPaymentCategoryOptions } from './logics/payment-category.logic';
 
 @Injectable()
 export class PaymentService {
@@ -36,6 +37,10 @@ export class PaymentService {
     private accountDebtRepository: AccountDebtRepository,
     private seq: Sequelize,
   ) {}
+
+  getPaymentCategories() {
+    return getPaymentCategoryOptions();
+  }
 
   async getAllPayments(
     query: GetAllPaymentsDto,

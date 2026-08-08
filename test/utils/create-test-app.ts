@@ -5,6 +5,7 @@ import { Test } from '@nestjs/testing';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from '../../src/app.module';
 import { configureApp } from '../../src/app';
+import { makeReq } from './request.logic';
 
 export async function createTestApp(): Promise<NestExpressApplication> {
   const moduleFixture = await Test.createTestingModule({
@@ -38,4 +39,9 @@ export const e2eTestUser = {
       ? process.env.E2E_TEST_OTHER_USER_PASSWORD
       : 'n',
   },
+};
+
+export type CreateTest = {
+  test: <T>(request: ReturnType<typeof makeReq>) => Promise<T>;
+  after: () => Promise<void>;
 };

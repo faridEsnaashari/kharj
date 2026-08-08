@@ -78,6 +78,18 @@ describe('PaymentService', () => {
     accountDebptRepository.create.mockResolvedValue({ id: 1 });
   });
 
+  it('getPaymentCategories returns an option for every category', () => {
+    const categories = service.getPaymentCategories();
+
+    expect(Object.keys(categories)).toHaveLength(
+      Object.values(PaymentCategory).length,
+    );
+    expect(categories.gymFood).toEqual({
+      key: PaymentCategory.GYM_FOOD,
+      value: 'gym food',
+    });
+  });
+
   it('throws NotFoundException when no accounts match bank+unit', async () => {
     accountRepository.findAll.mockResolvedValue([]);
 

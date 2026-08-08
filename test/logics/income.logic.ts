@@ -1,107 +1,95 @@
-import { Income } from 'src/income/entities/income.entity';
-import { createTestAccounts } from './account.logic';
-import { makeAppReq } from './request.logic';
-import { signinTestUsers } from './auth/signin.logic';
-import { date } from 'src/common/tools/date/date.tool';
 import { Account } from 'src/account/entities/account.entity';
+import { Income } from 'src/income/entities/income.entity';
+import { date } from 'src/common/tools/date/date.tool';
+import { SignedInUserTest } from './auth/signin.logic';
+import { KharjResponse, makeAppReq } from 'test/utils/request.logic';
 
-export async function createTestIncome(makeReq: ReturnType<typeof makeAppReq>) {
-  const { owner } = await signinTestUsers(makeReq);
-  const {
-    after: accountAfter,
-    ownerAccount,
-    otherAccount,
-  } = await createTestAccounts(makeReq);
+export type TestIncome = {
+  account: Account;
+  amount: Income['amount'];
+  category: Income['category'];
+  paidAt: Income['paidAt'];
+  description?: Income['description'];
+};
 
-  const income = await makeReq<Income>({
-    method: 'post',
-    baseUrl: '/income',
-    token: owner.data.token,
-    body: {
-      accountId: ownerAccount.data.id,
-      amount: 10,
-      category: 'HOGHOOGH',
-      paidAt: '2026-07-30 05:57:00',
-      description: 'fsdfsdf',
-    },
-  });
-
-  expect(income.success).toBeTruthy();
-  expect({
-    ...income.data,
-    paidAt: date(income.data.paidAt).format('YYYY-MM-DD HH:mm:ss'),
-  }).toMatchObject({
-    amount: 10,
-    category: 'HOGHOOGH',
-    description: 'fsdfsdf',
-    paidAt: '2026-07-30 05:57:00',
-    accountId: ownerAccount.data.id,
-    remain: 10,
-  });
-
-  let updatedAccount = await makeReq<Account>({
-    method: 'get',
-    token: owner.data.token,
-    baseUrl: `/account/${ownerAccount.data.id}`,
-  });
-
-  expect(updatedAccount.data.ballance).toBe(10);
-
-  const otherIncome = await makeReq<Income>({
-    method: 'post',
-    baseUrl: '/income',
-    token: owner.data.token,
-    body: {
-      accountId: otherAccount.data.id,
-      amount: 10,
-      category: 'HOGHOOGH',
-      paidAt: '2026-07-30 05:57:00',
-      description: 'fsdfsdf',
-    },
-  });
-
-  expect(otherIncome.success).toBeTruthy();
-  expect({
-    ...otherIncome.data,
-    paidAt: date(otherIncome.data.paidAt).format('YYYY-MM-DD HH:mm:ss'),
-  }).toMatchObject({
-    amount: 10,
-    category: 'HOGHOOGH',
-    description: 'fsdfsdf',
-    paidAt: '2026-07-30 05:57:00',
-    accountId: otherAccount.data.id,
-    remain: 10,
-  });
-
-  updatedAccount = await makeReq<Account>({
-    method: 'get',
-    token: owner.data.token,
-    baseUrl: `/account/${ownerAccount.data.id}`,
-  });
-
-  expect(updatedAccount.data.ballance).toBe(10);
-
-  updatedAccount = await makeReq<Account>({
-    method: 'get',
-    token: owner.data.token,
-    baseUrl: `/account/${otherAccount.data.id}`,
-  });
-
-  expect(updatedAccount.data.ballance).toBe(10);
+export function createTestIncome(makeReq: ReturnType<typeof makeAppReq>) {
+  let owner: SignedInUserTest['owner'] | null = null;
+  const created: KharjResponse<Income>[] = [];
 
   return {
+    test: async ({
+      users,
+      incomes,
+    }: {
+      users: SignedInUserTest;
+      incomes: TestIncome[];
+    }) => {
+      owner = users.owner;
+
+      const runningBalance = new Map<Account['id'], Account['ballance']>();
+
+      for (const incomeInput of incomes) {
+        const accountId = incomeInput.account.id;
+
+        if (!runningBalance.has(accountId)) {
+          runningBalance.set(accountId, incomeInput.account.ballance);
+        }
+
+        const income = await makeReq<Income>({
+          method: 'post',
+          baseUrl: '/income',
+          token: owner.data.token,
+          body: {
+            accountId,
+            amount: incomeInput.amount,
+            category: incomeInput.category,
+            paidAt: incomeInput.paidAt,
+            description: incomeInput.description,
+          },
+        });
+
+        expect(income.success).toBeTruthy();
+        expect({
+          ...income.data,
+          paidAt: date(income.data.paidAt).format('YYYY-MM-DD HH:mm:ss'),
+        }).toMatchObject({
+          amount: incomeInput.amount,
+          category: incomeInput.category,
+          ...(incomeInput.description
+            ? { description: incomeInput.description }
+            : {}),
+          paidAt: incomeInput.paidAt,
+          accountId,
+        });
+
+        created.push(income);
+
+        const expectedBalance =
+          runningBalance.get(accountId)! + incomeInput.amount;
+
+        runningBalance.set(accountId, expectedBalance);
+
+        const updatedAccount = await makeReq<Account>({
+          method: 'get',
+          token: owner.data.token,
+          baseUrl: `/account/${accountId}`,
+        });
+
+        expect(updatedAccount.data.ballance).toBe(expectedBalance);
+      }
+
+      return created;
+    },
     after: async () => {
-      await makeReq({
-        method: 'delete',
-        baseUrl: `/income/${income.data.id}`,
-        token: owner.data.token,
-      });
-      await makeReq({
-        method: 'delete',
-        baseUrl: `/income/${otherIncome.data.id}`,
-        token: owner.data.token,
-      });
-      await accountAfter();
+      return Promise.all(
+        created.map((income) =>
+          makeReq({
+            method: 'delete',
+            baseUrl: `/income/${income.data.id}`,
+            token: owner?.data.token,
+          }),
+        ),
+      );
     },
   };
 }

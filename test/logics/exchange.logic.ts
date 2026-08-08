@@ -1,85 +1,94 @@
 import { Exchange } from 'src/exchange/entities/exchange.entity';
-import { Income } from 'src/income/entities/income.entity';
 import { Account } from 'src/account/entities/account.entity';
-import { createTestAccounts } from './account.logic';
-import { makeAppReq } from './request.logic';
-import { signinTestUsers } from './auth/signin.logic';
+import { CreateExchangeDto } from 'src/exchange/dtos/create-exchange.dto';
+import { SignedInUserTest } from './auth/signin.logic';
+import { makeAppReq } from 'test/utils/request.logic';
 
-export async function createTestExchange(
-  makeReq: ReturnType<typeof makeAppReq>,
-) {
-  const { owner, relations } = await signinTestUsers(makeReq);
-  const {
-    after: accountAfter,
-    ownerAccount,
-    otherAccount,
-  } = await createTestAccounts(makeReq);
+export type TestExchange = {
+  fromAccountId: Account['id'];
+  toAccountId: Account['id'];
+  toUser: Account['ownedBy'];
+  fromAmount: Exchange['fromAmount'];
+  toAmount: Exchange['toAmount'];
+  paidAt: CreateExchangeDto['paidAt'];
+};
 
-  const funding = await makeReq<Income>({
-    method: 'post',
-    baseUrl: '/income',
-    token: owner.data.token,
-    body: {
-      accountId: ownerAccount.data.id,
-      amount: 500,
-      category: 'HOGHOOGH',
-      paidAt: '2026-07-30 05:57:00',
-      description: 'funding for exchange e2e',
-    },
-  });
-
-  expect(funding.success).toBeTruthy();
-
-  const exchange = await makeReq<Exchange>({
-    method: 'post',
-    baseUrl: '/exchange',
-    token: owner.data.token,
-    body: {
-      fromAccountId: ownerAccount.data.id,
-      toAccountId: otherAccount.data.id,
-      toUser: relations.data[0].id,
-      fromAmount: 100,
-      toAmount: 90,
-      paidAt: '2026-07-30 06:00:00',
-    },
-  });
-
-  expect(exchange.success).toBeTruthy();
-  expect(exchange.data).toMatchObject({
-    fromAmount: 100,
-    toAmount: 90,
-  });
-
-  let updatedAccount = await makeReq<Account>({
-    method: 'get',
-    token: owner.data.token,
-    baseUrl: `/account/${ownerAccount.data.id}`,
-  });
-
-  expect(updatedAccount.data.ballance).toBe(400);
-
-  updatedAccount = await makeReq<Account>({
-    method: 'get',
-    token: owner.data.token,
-    baseUrl: `/account/${otherAccount.data.id}`,
-  });
-
-  expect(updatedAccount.data.ballance).toBe(90);
+export function createTestExchange(makeReq: ReturnType<typeof makeAppReq>) {
+  let owner: SignedInUserTest['owner'] | null = null;
+  const created: Exchange[] = [];
 
   return {
-    exchange,
+    test: async ({
+      users,
+      fromAccount,
+      toAccount,
+      exchange,
+    }: {
+      users: SignedInUserTest;
+      fromAccount: Account;
+      toAccount: Account;
+      exchange: TestExchange;
+    }) => {
+      owner = users.owner;
+
+      const beforeFrom = await makeReq<Account>({
+        method: 'get',
+        token: owner.data.token,
+        baseUrl: `/account/${fromAccount.id}`,
+      });
+      const beforeTo = await makeReq<Account>({
+        method: 'get',
+        token: owner.data.token,
+        baseUrl: `/account/${toAccount.id}`,
+      });
+
+      const result = await makeReq<Exchange>({
+        method: 'post',
+        baseUrl: '/exchange',
+        token: owner.data.token,
+        body: exchange,
+      });
+
+      expect(result.success).toBeTruthy();
+      expect(result.data).toMatchObject({
+        fromAmount: exchange.fromAmount,
+        toAmount: exchange.toAmount,
+      });
+
+      created.push(result.data);
+
+      const afterFrom = await makeReq<Account>({
+        method: 'get',
+        token: owner.data.token,
+        baseUrl: `/account/${fromAccount.id}`,
+      });
+
+      expect(afterFrom.data.ballance).toBe(
+        beforeFrom.data.ballance - exchange.fromAmount,
+      );
+
+      const afterTo = await makeReq<Account>({
+        method: 'get',
+        token: owner.data.token,
+        baseUrl: `/account/${toAccount.id}`,
+      });
+
+      expect(afterTo.data.ballance).toBe(
+        beforeTo.data.ballance + exchange.toAmount,
+      );
+
+      return result.data;
+    },
     after: async () => {
-      await makeReq({
-        method: 'delete',
-        baseUrl: `/exchange/${exchange.data.id}`,
-        token: owner.data.token,
-      });
-      await makeReq({
-        method: 'delete',
-        baseUrl: `/income/${funding.data.id}`,
-        token: owner.data.token,
-      });
-      await accountAfter();
+      return Promise.all(
+        created.map((exchange) =>
+          makeReq({
+            method: 'delete',
+            baseUrl: `/exchange/${exchange.id}`,
+            token: owner?.data.token,
+          }),
+        ),
+      );
     },
   };
 }

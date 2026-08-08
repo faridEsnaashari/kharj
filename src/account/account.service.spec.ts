@@ -245,4 +245,17 @@ describe('AccountService', () => {
       expect.objectContaining({ where: { userId: 1, unitId: 20 } }),
     );
   });
+
+  describe('deleteAccount', () => {
+    it('deletes the account scoped to the requesting user', async () => {
+      accountRepository.delete.mockResolvedValue(1);
+
+      const result = await service.deleteAccount(5, user);
+
+      expect(accountRepository.delete).toHaveBeenCalledWith({
+        where: { id: 5, userId: user.id },
+      });
+      expect(result).toBe(1);
+    });
+  });
 });

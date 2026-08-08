@@ -186,7 +186,11 @@ src/
 │   ├── logics/
 │   │   ├── payment.logic.ts            selectAccountsForPayment, sortAccounts, getPrice,
 │   │   │                               restoreBalance, deductBalance, hasSufficientBalance
-│   │   └── payment.logic.type.ts
+│   │   ├── payment.logic.type.ts
+│   │   └── payment-category.logic.ts   getPaymentCategoryOptions() — hardcoded
+│   │                                   Record<string, CategoryOption<PaymentCategory>>,
+│   │                                   e.g. gymFood: { key: PaymentCategory.GYM_FOOD,
+│   │                                   value: 'gym food' }; backs GET /payment/categories
 │   └── entities/
 │       ├── payment.entity.ts
 │       └── repositories/
@@ -202,7 +206,10 @@ src/
 │   ├── enums/
 │   │   └── income-category.enum.ts
 │   ├── logics/
-│   │   └── income.logic.ts             calculateUpdatedBalance
+│   │   ├── income.logic.ts             calculateUpdatedBalance
+│   │   └── income-category.logic.ts    getIncomeCategoryOptions() — hardcoded
+│   │                                   Record<string, CategoryOption<IncomeCategory>>;
+│   │                                   backs GET /income/categories
 │   └── entities/
 │       ├── income.entity.ts
 │       └── repositories/
@@ -291,7 +298,8 @@ src/
     │                                       RouterExplorer route-mapping noise at startup
     ├── types/
     │   ├── entity.type.ts              CreateEntity<T>, UpdateEntity<T>
-    │   └── pagination.type.ts          Paginated<T> = { rows: T[]; count: number }
+    │   ├── pagination.type.ts          Paginated<T> = { rows: T[]; count: number }
+    │   └── category.type.ts            CategoryOption<T> = { key: T; value: string }
     ├── zod-schemas/
     │   ├── id.schema.ts
     │   └── date.schema.ts
@@ -591,9 +599,11 @@ methods).
 | GET    | `/account/static/weekly-payment-income` | Weekly income/payment totals grouped by unit (last 7 days)                              |
 | GET    | `/account/:id`                 | Get one account with owner/bank/unit info                                                       |
 | POST   | `/account`                     | Create account                                                                                  |
+| GET    | `/payment/categories`          | Payment categories as `Record<string, CategoryOption<PaymentCategory>>` (hardcoded)             |
 | GET    | `/payment`                     | List payments (filters: bankId, unitId, ownedBy, category)                                      |
 | POST   | `/payment`                     | Create payment (runs allocation logic)                                                          |
 | PUT    | `/payment/:id`                 | Update payment (reverses + re-applies)                                                          |
+| GET    | `/income/categories`           | Income categories as `Record<string, CategoryOption<IncomeCategory>>` (hardcoded)               |
 | GET    | `/income`                      | List incomes (filters: bankId, unitId, ownedBy, category)                                       |
 | GET    | `/income/:id`                  | Get one income                                                                                  |
 | POST   | `/income`                      | Create income                                                                                   |
@@ -636,14 +646,23 @@ main Jest config's `testRegex` never picks these up, and vice versa: `test/jest-
 `testRegex` only matches `.e2e-spec.ts$`). Run with:
 
 ```bash
-npm run test:e2e   # NODE_ENV=develop jest --config ./test/jest-e2e.json
+npm run test:e2e   # NODE_ENV=develop jest --config ./test/jest-e2e.json --runInBand
 ```
+
+`--runInBand` is required, not just a speed choice: every spec below signs in as the same fixture
+"owner" STAGE user and mutates the same account/payment/income rows for that user, so running
+specs concurrently would race each other.
 
 `NODE_ENV=develop` is required — that's what makes `appConfigs.nodeEnv === 'develop'` in
 `database.module.ts`, which is what points the connection at `STAGE_MYSQL_*` instead of the
 production `MYSQL_*` vars (see the STAGE-DB Working Rule above). E2E tests hit the real STAGE
-database — keep them read-only (`GET` requests) unless you've deliberately set up
-seed/transaction-rollback isolation; nothing here does that yet.
+database and are **not** read-only — each spec creates real accounts/payments/incomes/etc. through
+the real endpoints and asserts on the actual DB-backed side effects (balances, debts, remain
+totals). Isolation is **self-cleanup, not transaction rollback**: nothing here wraps a spec in a
+DB transaction it rolls back afterward — every spec ends with explicit `DELETE` requests (through
+the same API, not direct DB access) that remove exactly what it created. A new mutating e2e test
+must follow the same pattern — sign in, act, assert, then delete everything it created — or it
+will leak rows into STAGE on every run.
 
 - **`src/app.ts`** — `createApp()` (used by `src/main.ts`) now delegates the actual
   `app.useLogger`/`enableCors`/`useGlobalFilters`/`useGlobalInterceptors` wiring to an exported
@@ -660,14 +679,232 @@ seed/transaction-rollback isolation; nothing here does that yet.
   doesn't reproduce under plain `ts-node` — and NestJS's default bootstrap-failure teardown
   calls `process.exit(1)` on a fatal error, which kills the whole Jest worker outright (no test
   failure output, the run just dies). `Test.createTestingModule()` doesn't hit this.
-  `getTestAuthHeader(user?)`: mints a real JWT via `createUserToken` (same signing path
-  `POST /auth/signin` uses) for a known STAGE user — `E2E_TEST_USER` defaults to id `8`/`farid`,
-  overridable via `E2E_TEST_USER_ID`/`E2E_TEST_USER_NAME` env vars — so authenticated-route tests
-  don't need a real plaintext password, just a user row that already exists in STAGE.
-- **`test/app.e2e-spec.ts`** — unauthenticated `GET /`, asserts the response envelope shape.
-- **`test/bank.e2e-spec.ts`** — `GET /bank` without a token (expects `403` from `HasAccessGuard`)
-  and with a minted token (expects `200` + real bank rows) — the template for testing any other
-  guarded route.
+  Also exports `e2eTestUser`: `{ owner: { name, password }, other: { name, password } }`, read
+  from `E2E_TEST_USER_NAME`/`E2E_TEST_USER_PASSWORD`/`E2E_TEST_OTHER_USER_NAME`/
+  `E2E_TEST_OTHER_USER_PASSWORD` — a real plaintext-password STAGE login, not a minted JWT. Specs
+  authenticate by actually calling `POST /auth/signin`, the same way a real client would. The
+  `owner` user is expected to already have exactly two related users set up in STAGE
+  (`GET /user/related-user` returning 2 rows) — this is STAGE fixture data the tests depend on,
+  not something any spec creates; `other`'s credentials exist for specs that need a second,
+  independently-authenticated user rather than just a related-user id.
+- **`test/utils/request.logic.ts`** — infra shared by every spec and every `logics/` file (lives
+  under `utils/`, not `logics/`, precisely because it isn't domain logic). `makeAppReq(app)`
+  returns a bound `makeReq` closure so callers don't have to pass `app` on every call.
+  `makeReq<Res>(app, { method, baseUrl, body?, query?, token? })` wraps `supertest`, optionally
+  sets `Authorization: Bearer <token>`, and returns the already-parsed `KharjResponse<Res>`
+  (`{ success, message, data }`) body — callers read `.data` directly instead of unwrapping
+  `.body` themselves each time.
+
+#### The `logics/` composition pattern
+
+Each domain gets its own `test/logics/<domain>.logic.ts` exporting a `createTest<Domain>(makeReq)`
+factory. Calling the factory returns exactly `{ test, after }` — every logic file has this same
+two-function shape, no more and no less:
+
+- **`test(data)`** performs the real HTTP calls and assertions for that one domain, and returns
+  whatever a later step in the same spec might need (e.g. `account.logic.ts`'s `test()` returns
+  the created `Account[]`, which a payment/income/exchange spec then feeds into the next logic
+  file). `data` carries everything `test()` needs explicitly — signed-in users, already-created
+  accounts, config values — never re-derived, hardcoded, or read off some ambient state. This is
+  what makes the files composable: a spec wires several `createTestX(makeReq)` instances together
+  by passing one's return value into the next's `test()` call.
+- **`after()`** always returns `Promise.all([...])` (or `.map()` over whatever was created, for a
+  dynamic-length list like payments — `selectAccountsForPayment` can split one `POST /payment`
+  across several `Payment` rows) of independent `DELETE` calls, never a sequential `for` loop of
+  `await`s. The point isn't performance — it's that `Promise.all` kicks off every delete
+  concurrently regardless of whether an earlier one throws, so one failed cleanup call doesn't
+  block the others from still running. Internally each factory closures a single `created` array
+  that `after()`'s cleanup list is built from — don't keep a separate `results` array alongside
+  `created` purely to mirror it; that was tried and reverted as pointless duplication.
+- **Every `createTestX(makeReq)` instance is created fresh per test and `test()` is called at
+  most once on it.** A spec with several `it()` blocks (see `payment.e2e-spec.ts` below)
+  instantiates `accountTest`/`incomeTest`/etc. in `beforeEach`, not `beforeAll` — so each test gets
+  its own instance with an empty closured `created` array, and `after()` in `afterEach` cleans up
+  exactly what that one test made before the next test's `beforeEach` runs. This is what lets
+  `test()` just `return created;` directly, with no offset-tracking needed — a **real bug** was hit
+  and fixed here: an earlier version shared one `accountTest` instance across all of
+  `payment.e2e-spec.ts`'s `it()` blocks via `beforeAll`/`afterAll`, so `created` accumulated across
+  calls, and `const [x] = await accountTest.test(...)` in the second `it()` silently destructured
+  index `0` of the *entire cross-call history* — some earlier `it()`'s account, not the one just
+  created — producing confusing arithmetic mismatches (expected balance computed from the wrong
+  starting point) rather than an obvious "wrong account" failure. The fix wasn't to slice the
+  return value; it was to stop sharing instances across tests at all.
+
+Current logic files, all under `test/logics/`:
+
+- **`auth/signin.logic.ts`** — `signinTestUsers(makeReq)`: signs in as `e2eTestUser.owner` via
+  `POST /auth/signin`, fetches `GET /user/related-user`, asserts exactly 2 related users. Returns
+  `{ owner, relations }` (typed as `SignedInUserTest`) — every other logic file takes this as
+  its `users` parameter. `after()` is a no-op; there's nothing to sign back out of.
+  **`relations.data[0]` is the signed-in `owner` themself** (this STAGE fixture's related-users
+  list includes a self entry first), and `relations.data[1]` is the one real *other* related user
+  — this is what makes an "account owned by the caller's own book" test possible without a
+  dedicated "who am I" endpoint or decoding the JWT: use `relations.data[0].id` for `ownedBy` to
+  mean "the caller themself," and `relations.data[1].id` to mean "an actual related user."
+- **`account.logic.ts`** — `createTestAccount(makeReq)`: `test({ users, accounts: TestAccount[] })`
+  loops over an arbitrary list of accounts to create (each with its own `ownedBy`/`userId`/
+  `ballance`/`priority`/`bank.symbol`/`unit.symbol`), asserting each creation and that a duplicate
+  bank+unit+owner combo is rejected. It is **not** hardcoded to exactly an "owner" and an "other"
+  account — a spec that needs accounts for three related users just passes a 3-item array. Returns
+  the created `Account[]` in input order (destructure by position, e.g.
+  `const [ownerAccount, otherAccount] = await accountTest.test(...)`).
+- **`income.logic.ts`** — `createTestIncome(makeReq)`: `test({ users, incomes: TestIncome[] })`,
+  where each `TestIncome` carries its **own** `account: Account` (not one account shared across
+  the whole call) — one `test()` call can fund several different accounts, including related
+  users' accounts, in a single pass. Running-balance math is seeded from the `account.ballance`
+  the caller already has (no extra `GET` needed just to learn the starting point), but every
+  income creation is still followed by a real `GET /account/:id` to assert the persisted balance
+  actually moved — seeding from trusted input and verifying against the live API are different
+  concerns, both matter.
+- **`payment.logic.ts`** — `test({ users, debitedAccount, creditedAccount?, payment })` reads
+  balances entirely from `POST /payment`'s own response instead of any `GET /account/:id` call.
+  This works because `selectAccountsForPayment` (backend `payment.logic.ts`) puts *every* account
+  it considered into `selectedAccounts` — including ones it didn't actually draw from, with
+  `minus: 0` — and `PaymentService.createPayment` creates a `Payment` row for each entry in that
+  list, not just the ones that were debited. So when a payment is covered by pulling from a
+  different owner's account, the response's `Payment[]` already contains **two** rows: one for
+  `debitedAccount` (`amount` = what was actually deducted, `remain` = its new balance) and one for
+  the untouched `creditedAccount` (`amount: 0`, `remain` = its unchanged balance) — both are found
+  by `accountId` in the same array, no separate fetch needed for either side. `creditedAccount` is
+  **optional**: pass it when the payment pulls from a different owner's account (asserts that
+  payment row exists with `amount: 0`, and asserts the resulting `AccountDebt` via `GET /debt`
+  using the accounts' *caller-supplied* `ownedBy` — safe to trust unlike `ballance`, since
+  `ownedBy` is fixed at account-creation time and never changes); omit it when the payment is fully
+  covered by `debitedAccount` itself (self-funded — no debt should exist, so nothing further to
+  assert). `payment.e2e-spec.ts` covers all three shapes this allocation logic can take: pulling
+  from another owner's account (debt created), the account owner paying for themself out of their
+  own funded account (no debt), and a payment "for" a related user whose *own* account already
+  covers it rather than needing to draw from someone else's (also no debt, but a different
+  account/owner combination than the self-pay case).
+- **`exchange.logic.ts`** — unlike `payment.logic.ts`, this still does `GET /account/:id` fresh
+  immediately before and after the mutating call, never trusting a passed-in `Account` object's
+  `ballance` for the math (the account may have been funded by an `income.logic.ts` step *after*
+  it was created, so any `ballance` captured at account-creation time is stale by the time an
+  exchange runs). `POST /exchange` only ever creates a single `Exchange` row describing the
+  transfer itself — unlike payments, there's no per-account response row to read a resulting
+  balance off of, so a fresh fetch is the only way to verify both sides actually moved by the
+  right amount.
+- **`uncomplete-payment.logic.ts`** — `createTestUncompletePayment(makeReq)`: `test({ users,
+  bankId, text, expected })` posts to `/uncomplete-payments/text` and asserts the parsed row
+  against `expected` (a `Partial<UncompletePayment>`). Converting the pending row into a real
+  payment isn't this logic file's job — the spec composes `uncompletePaymentTest.test(...)` and
+  `paymentTest.test(...)` itself, passing the pending row's `id` as the payment's
+  `uncompletePaymentId`, mirroring how the real frontend Inbox flow works (see UncompletePayments
+  above) — there is no dedicated "convert" endpoint to wrap.
+
+**`toMatchObject` gotcha**: never spread an optional field into an expected object unconditionally
+when it might be `undefined` — `{ description: payment.description }` fails against a real
+response that simply omits the key, because `toMatchObject` treats an explicit `description:
+undefined` in the *expected* object differently from the key being absent, even though both read
+as "no description" to a human. Use `...(value ? { key: value } : {})` instead (both
+`payment.logic.ts` and `income.logic.ts` do this for `description`).
+
+**Category/type fields must use the real backend enum**, not a same-looking string literal —
+`category: PaymentCategory.FOOD`, not `category: 'FOOD'`. A TS `enum` is nominally typed, so a
+string literal that happens to equal an enum member's value does not structurally satisfy that
+enum's type; this is Zod/DTO validation working as intended even inside a test file, and it
+surfaces immediately as a compile error rather than a runtime one.
+
+#### Spec file shape and composition order
+
+Every `*.e2e-spec.ts` is a **synchronous** `describe(() => {...})`. Setup splits across two
+scopes, and it matters which one each piece goes in: `app`/`makeReq` are expensive (a real Nest
+app + STAGE DB connection) and shared by the whole file, so they live in `beforeAll`/`afterAll`.
+The `createTestX(...)` instances are cheap and must be **fresh per test** — they're created in
+`beforeEach` and cleaned up in `afterEach`, never `beforeAll`/`afterAll`, even when a file has only
+one `it()` today:
+
+```typescript
+describe('Create Payments', () => {
+  let app: NestExpressApplication;
+  let makeReq: ReturnType<typeof makeAppReq>;
+  let accountTest: ReturnType<typeof createTestAccount>;
+  let incomeTest: ReturnType<typeof createTestIncome>;
+  let paymentTest: ReturnType<typeof createTestPayment>;
+
+  beforeAll(async () => {
+    app = await createTestApp();
+    makeReq = makeAppReq(app);
+  });
+
+  afterAll(async () => {
+    await app.close();
+  });
+
+  beforeEach(() => {
+    accountTest = createTestAccount(makeReq);
+    incomeTest = createTestIncome(makeReq);
+    paymentTest = createTestPayment(makeReq);
+  });
+
+  afterEach(async () => {
+    await paymentTest.after();
+    await incomeTest.after();
+    await accountTest.after();
+  });
+
+  it('Creates a payment that pulls from another owner and records a debt', async () => {
+    const userTest = await signinTestUsers(makeReq);
+    const users = await userTest.test();
+
+    const [ownerAccount, otherAccount] = await accountTest.test({ users, accounts: [...] });
+    await incomeTest.test({ users, incomes: [{ account: otherAccount.data, ... }] });
+    await paymentTest.test({
+      users,
+      debitedAccount: otherAccount.data,
+      creditedAccount: ownerAccount.data,
+      payment: { ... },
+    });
+  });
+});
+```
+
+**`describe` must never be `async`.** `describe('...', async () => { const app = await
+createTestApp(); ... })` looks like it should work but doesn't — Jest collects a suite's `it()`
+calls synchronously while the callback runs, so anything after the first `await` inside an async
+describe body registers too late. This was found the hard way: it fails with `Returning a Promise
+from "describe" is not supported. Tests must be defined synchronously.` — but only when Jest can
+actually see that error. If a broken async-describe file runs alongside working suites, the
+`createTestApp()` call inside it keeps executing after Jest already tore the (empty) suite down,
+which throws `TypeError: Dialect is not a constructor` deep inside Sequelize — a red herring that
+looks exactly like the known ts-jest/Sequelize module-resolution issue described above but is
+actually just fallout from the async-describe bug, not a real module-duplication problem. If that
+error ever reappears, check for an async `describe` callback before suspecting Sequelize.
+
+**`afterEach` composition order matters and is never a single merged `Promise.all`**: call each
+`.after()` sequentially, leaf entities first — payments/incomes/exchanges/pending-imports before
+the accounts they reference, since deleting an account while something still points at it can fail
+server-side. Only *within* one logic file's own `after()` is concurrency safe (see above), because
+those deletes don't depend on each other.
+
+**Why `beforeEach`/`afterEach`, not `beforeAll`/`afterAll`, for the `createTestX(...)`
+instances.** An earlier version put them in `beforeAll` and shared one instance across every
+`it()` in the file, with cleanup deferred to a single `afterAll` at the very end. Two problems
+came from that, both now moot: first, the `created`-array bug described above; second, since
+every `it()`'s accounts were all still alive in STAGE simultaneously (nothing gets deleted until
+the whole file finishes), `payment.e2e-spec.ts`'s three `it()` blocks each had to use a different
+bank (`RESALAT`, `SEPAH`, `MELY`) just to avoid colliding on `(bank, unit, ownedBy)` uniqueness and
+to stop the payment-allocation endpoint from pooling one test's leftover accounts into another
+test's payment. With `beforeEach`/`afterEach`, each test's accounts are deleted before the next
+test's `beforeEach` even runs, so neither problem can happen — a new `it()` block never needs to
+pick a bank the earlier ones haven't used. (The existing three `it()` blocks still use different
+banks; that's harmless leftover specificity, not a requirement for new tests.)
+
+**Leftover worktrees under `.claude/worktrees/` used to break `npm run test:e2e` outright** —
+`test/jest-e2e.json` had no `testPathIgnorePatterns`, so it picked up any stray `*.e2e-spec.ts`
+sitting inside `.claude/worktrees/*/test/` and ran those copies too, alongside the real ones in
+`test/`. This wasn't just "debugging noise from inside a worktree" — a plain `npm run test:e2e`
+from a completely normal main checkout would fail as long as *any* worktree anywhere under
+`.claude/worktrees/` happened to contain its own `test/` copy (e.g. one left behind mid-refactor by
+an unrelated session), because a stale worktree's copy can easily have a since-deleted import
+(like the old `./logics/request.logic` path from before it moved to `utils/`) that fails to even
+compile — `createTestApp()` then throws deep inside Sequelize with `TypeError: Dialect is not a
+constructor`, which looks exactly like the known ts-jest/Sequelize module-resolution issue
+described above but is unrelated. This was reproduced directly and is now fixed for good:
+`test/jest-e2e.json` sets `"testPathIgnorePatterns": ["/node_modules/", "/.claude/"]`, so
+worktree-nested tests are never discovered regardless of what other worktrees exist. If this error
+ever reappears, first rule out both known causes before suspecting Sequelize itself: an async
+`describe` callback (previous entry) or a stray worktree somehow bypassing this ignore pattern.
 
 ### Running the Backend
 
@@ -704,6 +941,13 @@ STAGE_MYSQL_PASSWORD=...
 
 # SECRET
 JWT_SECRET_KEY=...
+
+# E2E TEST — see Testing > E2E tests; must be a real STAGE user (plaintext password),
+# with E2E_TEST_USER_NAME already having exactly two related users set up in STAGE
+E2E_TEST_USER_NAME=...
+E2E_TEST_USER_PASSWORD=...
+E2E_TEST_OTHER_USER_NAME=...
+E2E_TEST_OTHER_USER_PASSWORD=...
 ```
 
 ---
@@ -741,24 +985,33 @@ file) that renders:
   header/profile screen),
 - `<Routes>` inside `<div className="app-content">` — `/` → `Dashboard`,
   `/payment` → `Payment`, `/income` → `Income`, `/exchange` → `Exchange`,
-  `/inbox` → `Inbox`, `/accounts` → `Accounts`, `*` → redirect to `/` — there
-  is no `/accounts/:id` route: opening one account is a modal
-  (`AccountDetailsModal`) over the list, not a navigation, so it never needed
-  its own URL,
+  `/inbox` → `Inbox`, `/accounts` → `Accounts`, `/debts` → `Debts`, `*` →
+  redirect to `/` — there is no `/accounts/:id` route: opening one account is
+  a modal (`AccountDetailsModal`) over the list, not a navigation, so it never
+  needed its own URL,
 - `<BottomNav tabs={NAV_TABS} />` — the persistent tab bar, shown on every
   authenticated page.
 
 **Adding a new page**: add a `<Route>` in `AuthenticatedShell`; a page
-existing doesn't automatically mean it belongs in `NAV_TABS` too — `Inbox` and
-`Accounts` are each reached only via a dashboard action tile (Excel Import /
-Accounts), not their own tab (no Visly mockup screen puts either in a
-top-level nav). Add a `NAV_TABS` entry (also in `App.jsx`) — `{ key, label,
-icon, path }` — only when actually asked for one; that's the whole
-integration, `BottomNav` (`shared/components/BottomNav.jsx`) is generic and
-needs no changes per tab.
-`NAV_TABS` currently has Home, Payment, Income and Exchange;
-Accounts/Debts/Profile get added the same way once those pages exist — don't
-add placeholder tabs for pages that don't exist yet.
+existing doesn't automatically mean it belongs in `NAV_TABS` too — `Accounts`
+is reached only via a dashboard `ActionButtons` tile, not its own tab (no
+Visly mockup screen puts it in a top-level nav). Add a `NAV_TABS` entry (also
+in `App.jsx`) — `{ key, label, icon, path }` — only when actually asked for
+one; that's the whole integration, `BottomNav`
+(`shared/components/BottomNav.jsx`) is generic and needs no changes per tab.
+`NAV_TABS` currently has Home, Payment, Income, Exchange and Inbox — `Inbox`
+is deliberately reachable both ways (a `NAV_TABS` tab *and* the dashboard's
+"Excel Import" `ActionButtons` tile still navigate to the same `/inbox`
+route); `Debts` was moved out of `NAV_TABS` into an `ActionButtons` tile
+instead (see below) rather than staying a persistent tab. Profile gets added
+to `NAV_TABS` the same way once that page exists — don't add placeholder tabs
+for pages that don't exist yet.
+
+**Dashboard `ActionButtons` tiles** (`features/dashboard/components/ActionButtons.jsx`):
+Pay, Income, Exchange, Excel Import (→ `/inbox`), Accounts (→ `/accounts`),
+Debts (→ `/debts`) — a 6th tile, wrapping to 4 + 2 in the `.dashboard-actions`
+grid. Same rule as `NAV_TABS`: add a tile only when a page is meant to be
+reached this way, not preemptively.
 
 `.app-content`'s bottom padding (`src/App.css`, `--bottom-nav-height` token in
 `tokens.css`) is the one place fixed-nav clearance is handled — a page's own
@@ -846,19 +1099,21 @@ src/
 │   │   │                           infrastructure only, no calculation/formatting (see logic/)
 │   │   ├── logic/
 │   │   │   └── dashboard.logic.js  domain logic — mergeGroupAndWeekly (transaction-rendering
-│   │   │                           logic that used to live here moved to shared/lib/transactions.js
-│   │   │                           once the Payment page needed the same rules)
+│   │   │                           logic that used to live here moved to
+│   │   │                           features/transaction/logic/transaction.logic.js once the
+│   │   │                           Payment page needed the same rules)
 │   │   ├── hooks/
 │   │   │   └── useDashboard.js     fetches both statistic endpoints + activity (via
-│   │   │                           shared/api/transaction.api.js); owns the activity type
-│   │   │                           filter state; delegates calculation to logic/
+│   │   │                           features/transaction/api/transaction.api.js); owns the
+│   │   │                           activity type filter state; delegates calculation to logic/
 │   │   ├── components/
 │   │   │   ├── UnitCard.jsx        balance + weekly income/payment for one unit
-│   │   │   └── ActionButtons.jsx   Pay / Income / Exchange / Excel Import / Accounts tiles —
-│   │   │                           `onPay` navigates to `/payment`, `onIncome` to `/income`,
-│   │   │                           `onExchange` to `/exchange`, `onExcelImport` to `/inbox`,
-│   │   │                           `onAccounts` to `/accounts`; a 4-column grid (`.dashboard-actions`
-│   │   │                           in dashboard.css) so the 5 tiles wrap 4 + 1
+│   │   │   └── ActionButtons.jsx   Pay / Income / Exchange / Excel Import / Accounts / Debts
+│   │   │                           tiles — `onPay` navigates to `/payment`, `onIncome` to
+│   │   │                           `/income`, `onExchange` to `/exchange`, `onExcelImport` to
+│   │   │                           `/inbox`, `onAccounts` to `/accounts`, `onDebts` to `/debts`;
+│   │   │                           a 4-column grid (`.dashboard-actions` in dashboard.css) so
+│   │   │                           the 6 tiles wrap 4 + 2
 │   │   └── styles/
 │   │       └── dashboard.css       horizontally-scrollable unit-card row (touch carousel,
 │   │                               same pattern as the mockup's "Your Accounts" section)
@@ -1110,26 +1365,34 @@ src/
 │   │   │                           only, never submitted
 │   │   └── styles/
 │   │       └── inbox.css
-│   └── debts/
-│   └── debts/
+│   ├── debts/
+│   └── transaction/                 no page/route of its own — see "Feature folders without a
+│       │                            page" below
+│       ├── index.js                 barrel: RecentActivityList, getRecentActivity,
+│       │                            ACTIVITY_FILTERS
+│       ├── api/
+│       │   └── transaction.api.js   getRecentActivity({ type, bankId, unitId, page, size })
+│       ├── logic/
+│       │   └── transaction.logic.js ACTIVITY_FILTERS + transaction-rendering rules (title,
+│       │                            subtitle, signed amount, source label)
+│       └── components/
+│           └── RecentActivityList.jsx  filterable (All/Income/Pay) transaction list —
+│                                       consumed by dashboard, payments, income, exchange and
+│                                       accounts (via `../../transaction` / `../transaction`
+│                                       imports, not `shared/`)
 └── shared/
     ├── components/                 Design-system components (see below)
     │   ├── index.js                barrel — import from here, not from files
     │   ├── icons.jsx                inline stroke icons, inherit currentColor
-    │   ├── RecentActivityList.jsx  filterable (All/Income/Pay) transaction list — shared by
-    │   │                           dashboard, payments, income, exchange and inbox, see
-    │   │                           Domain Logic vs Infrastructure
     │   └── BottomNav.jsx           persistent tab bar, generic over a `tabs` prop (see
     │                               Routing & Navigation)
     ├── api/
-    │   ├── transaction.api.js      getRecentActivity({ type, bankId, unitId, page, size })
     │   ├── lookups.api.js          getBanks({ userId }), getUnits({ userId }),
     │   │                           getRelatedUsers(), getAccounts({ bankId, unitId, ownedBy,
     │   │                           userId }) — reference-data lookups shared by every
     │   │                           create-transaction form; promoted out of
     │   │                           payments/api/payment.api.js once income/ needed the exact
-    │   │                           same ones (same graduation rule as shared/lib/transactions.js).
-    │   │                           `userId` on all three is optional and only matters for
+    │   │                           same ones. `userId` on all three is optional and only matters for
     │   │                           exchange/'s "To" side — see Cross-Book Lookups above; every
     │   │                           other caller omits it and gets their own book, unchanged
     │   └── create-transaction.api.js  createPayment(dto), createIncome(dto) — promoted out of
@@ -1163,9 +1426,10 @@ src/
     │                                   usePaginatedList.js's `loadMore`/`hasMore`/`loadingMore`
     ├── lib/
     │   ├── date.js                 dayjs + Jalali helpers
-    │   └── transactions.js         ACTIVITY_FILTERS + transaction-rendering rules (title,
-    │                               subtitle, signed amount, source label) — promoted from
-    │                               dashboard.logic.js once payments needed them too
+    │   └── categories.js           categoriesToOptions(categories) — converts the
+    │                               `{ camelKey: { key, value } }` shape the payment/income
+    │                               categories API returns into the `{ value, label }[]` shape
+    │                               `Select` expects
     ├── styles/
     │   ├── tokens.css              design tokens — the single source of truth
     │   └── components.css          all component styles
@@ -1196,38 +1460,83 @@ display — gets its own `logic/<feature>.logic.js`, e.g.
   data, render this," not compute business rules inline. If a component has a
   ternary/ helper deciding what a value *means* (not just how to lay it out),
   that's a `logic/` candidate, not a component-local helper.
-- **Fixed vocabularies go in `constants/`**, not `logic/` — this already
-  existed for `features/auth/constants/authStates.js`; `paymentCategories.js`/
-  `incomeCategories.js` used to live in their own features' `constants/`
-  too, until they graduated to `shared/constants/` (see below).
+- **Fixed vocabularies that don't come from the API go in `constants/`**, not
+  `logic/` — e.g. `features/auth/constants/authStates.js`. Payment/income
+  categories are *not* an example of this anymore (see below) — they're
+  fetched from the backend, not hand-maintained.
 - **Once a feature's `logic/`/`api/` is genuinely reused by a second feature,
-  it graduates to `shared/`** — not before (don't pre-promote something only
-  one feature uses). `shared/lib/transactions.js` and
-  `shared/api/transaction.api.js` are the first example: `RecentActivityList`
-  (now `shared/components/RecentActivityList.jsx`) started as
-  dashboard-only, then the Payment page needed the exact same rendering
-  rules and data fetch, so both moved up rather than being duplicated.
-  `shared/lib/` is to `shared/api/` what a feature's own `logic/` is to its
-  `api/` — same split, wider scope. `shared/api/lookups.api.js`
-  (`getBanks`/`getUnits`/`getRelatedUsers`/`getAccounts`) is the second
-  example: it started in `payments/api/payment.api.js`, then `income/` needed
-  the exact same Bank/Unit/Owner/Account lookups, so it moved up too.
-  `shared/api/create-transaction.api.js` (`createPayment`/`createIncome`) and
-  `shared/constants/{paymentCategories,incomeCategories}.js` are the third:
-  `payments/` and `income/` each held their own copy until `inbox/`'s convert
-  modal needed both create calls and both category lists from a third
-  feature, so all four moved up — `payments/`/`income/` now have no `api/` or
-  `constants/` folder of their own at all, only `logic/`, `hooks/`,
-  `components/` and `styles/`. `exchange/api/exchange.api.js`'s
-  `createExchange` deliberately did **not** graduate — nothing but `exchange/`
-  calls it, so promoting it would be the "pre-promote something only one
-  feature uses" mistake this rule warns against.
+  it graduates out of that feature's own folders** — not before (don't
+  pre-promote something only one feature uses). Where it graduates *to*
+  depends on what it is: `shared/` is for genuinely generic, domain-agnostic
+  code (date/number formatting, the design system) that any feature could
+  plausibly need; a reused *domain* concept instead gets its own feature
+  folder that other features import from directly, even if it has no page of
+  its own — see "Feature folders without a page" below.
+  `shared/api/lookups.api.js` (`getBanks`/`getUnits`/`getRelatedUsers`/
+  `getAccounts`) is the `shared/`-bound example: it started in
+  `payments/api/payment.api.js`, then `income/` needed the exact same
+  Bank/Unit/Owner/Account lookups, so it moved up — these lookups aren't a
+  domain of their own, they're generic reference-data fetches any
+  create-transaction form needs. `features/transaction/` is the other kind:
+  `RecentActivityList` started as dashboard-only, then Payment/Income/
+  Exchange/Accounts needed the exact same rendering rules and data fetch —
+  but "recent activity" is a real domain concept (the payment+income
+  transaction feed), not generic UI-kit code, so it graduated into its own
+  `features/transaction/` instead of `shared/`, and every consuming feature
+  imports it from there.
+  `shared/api/create-transaction.api.js` (`createPayment`/`createIncome`) is
+  a `shared/`-bound example too: `payments/` and `income/` each held their
+  own copy until `inbox/`'s convert modal needed both create calls from a
+  third feature, so it moved up — `payments/`/`income/` now have no `api/`
+  folder of their own at all, only `logic/`, `hooks/`, `components/` and
+  `styles/`. `exchange/api/exchange.api.js`'s `createExchange` deliberately
+  did **not** graduate — nothing but `exchange/` calls it, so promoting it
+  would be the "pre-promote something only one feature uses" mistake this
+  rule warns against. Payment/income categories are **not** a
+  constants-graduation example anymore — they were a hand-maintained
+  `PAYMENT_CATEGORIES`/`INCOME_CATEGORIES` constants list at one point, but
+  are now fetched from `GET /payment/categories`/`GET /income/categories`
+  (backed by `src/payment/logics/payment-category.logic.ts` /
+  `src/income/logics/income-category.logic.ts` on the backend) and reshaped
+  by `shared/lib/categories.js`'s `categoriesToOptions`; there is no
+  `shared/constants/` directory.
 
 Not every feature needs a `logic/` folder — `auth/` doesn't have one yet
 because its only domain rule (the `username`/`email` fallback in
 `useAuth.js`) is a single line; add the folder once there's an actual
 calculation or transformation to put in it, same as the backend only adds a
 `logics/` file when a module has one.
+
+#### Feature folders without a page
+
+`features/` normally means "a routed page" — every other folder under
+`features/` has a top-level `<Name>.jsx` wired to a `<Route>` in `App.jsx`.
+`features/transaction/` is the one exception: it has no page, no route, and
+no entry in `App.jsx` at all — just `api/`, `logic/`, and `components/`,
+exported through its own `index.js` barrel, the same shape any other
+feature's non-page folders take.
+
+The distinction that decides whether reused code becomes a page-less feature
+folder like this or graduates to `shared/` (see Domain Logic vs
+Infrastructure above) is **domain-specific vs. generic**: `shared/` is for
+code any feature could plausibly need regardless of what it's about (date
+formatting, the design system, generic reference-data lookups). Code that
+*is* a real business concept — "the payment+income transaction feed" for
+`transaction/`, `RecentActivityList`, `getRecentActivity`,
+`ACTIVITY_FILTERS` — stays out of `shared/` even once several features use
+it, because dumping domain logic into `shared/` makes `shared/` itself
+untrustworthy as "generic, safe to reuse blindly." It gets a `features/`
+folder instead, and other features are allowed to import from it directly
+(`import { RecentActivityList } from '../transaction'` /
+`'../../transaction'` depending on depth) — the usual "features don't import
+from other features, only from `shared/`" expectation doesn't apply to this
+kind of folder, since it isn't a page and can't create a routing/state
+coupling the way importing from another page-owning feature would.
+
+Only create one of these when a second feature actually needs the first
+feature's domain code — same promotion trigger as any other graduation, just
+a different destination. Don't invent an empty `features/<domain>/` folder
+speculatively.
 
 ### Auth Flow
 
@@ -1430,12 +1739,13 @@ VITE_API_URL=http://localhost:3000
 - Persian (Jalali) calendar input is supported via the date tool
 - `ballance` (note the spelling) is the field name used throughout — do not correct it
 - Error messages are snake_case strings, e.g. `'unit-not-found'`, `'insufficient-balance'`
-- The frontend's `PAYMENT_CATEGORIES` (`../kharjf/kharj/src/shared/constants/paymentCategories.js`)
-  is a hand-maintained mirror of the backend's `PaymentCategory` enum
-  (`src/payment/enums/payment-category.enum.ts`) — there's no categories
-  endpoint, so a new category added to the backend enum needs the same value
-  added to that frontend list by hand, or it silently won't be selectable in
-  the Payment form (or Inbox's convert modal, for a PAYMENT-type pending
-  import). Same pattern for `INCOME_CATEGORIES`
-  (`../kharjf/kharj/src/shared/constants/incomeCategories.js`) mirroring
-  `IncomeCategory` (`src/income/enums/income-category.enum.ts`).
+- Payment/income categories are **not** hand-mirrored on the frontend anymore.
+  `GET /payment/categories` / `GET /income/categories` serve them from
+  `src/payment/logics/payment-category.logic.ts` /
+  `src/income/logics/income-category.logic.ts` — each a hardcoded
+  `Record<string, { key: PaymentCategory | IncomeCategory, value: string }>`
+  keyed by a camelCase name (e.g. `gymFood: { key: PaymentCategory.GYM_FOOD,
+  value: 'gym food' }`). Adding a category still means editing backend code
+  by hand (add the enum member *and* an entry in the logic file's returned
+  object), but the frontend picks it up automatically the next time it
+  fetches the list — no matching frontend file to remember to update.

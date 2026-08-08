@@ -12,6 +12,7 @@ import { BankModel } from 'src/bank/entities/bank.entity';
 import { UnitModel } from 'src/unit/entities/unit.entity';
 import { calculateUpdatedBalance } from './logics/income.logic';
 import { Sequelize } from 'sequelize-typescript';
+import { getIncomeCategoryOptions } from './logics/income-category.logic';
 
 @Injectable()
 export class IncomeService {
@@ -20,6 +21,10 @@ export class IncomeService {
     private accountRepository: AccountRepository,
     private seq: Sequelize,
   ) {}
+
+  getIncomeCategories() {
+    return getIncomeCategoryOptions();
+  }
 
   async findOneIncome(id: number) {
     return this.incomeRepository.findOneByIdOrFail(id);

@@ -36,4 +36,31 @@ describe('AuthService', () => {
       service.signin({ username: 'nope', password: 'wrong' }),
     ).rejects.toThrow('user not found');
   });
+
+  describe('signup', () => {
+    it('creates a new user with a generated related_code and returns a signed token', async () => {
+      userRepo.create.mockResolvedValue({ id: 5, name: 'newuser' });
+
+      const result = await service.signup({
+        username: 'newuser',
+        password: '12345678',
+      });
+
+      expect(userRepo.create).toHaveBeenCalledWith({
+        name: 'newuser',
+        password: '12345678',
+        related_code: expect.any(String),
+      });
+      expect(typeof result.token).toBe('string');
+      expect(result.token.length).toBeGreaterThan(0);
+    });
+
+    it('propagates a repository error', async () => {
+      userRepo.create.mockRejectedValue(new Error('duplicate name'));
+
+      await expect(
+        service.signup({ username: 'dup', password: '12345678' }),
+      ).rejects.toThrow('duplicate name');
+    });
+  });
 });

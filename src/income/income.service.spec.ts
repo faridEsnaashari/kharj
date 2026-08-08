@@ -72,6 +72,18 @@ describe('IncomeService', () => {
     );
   });
 
+  it('getIncomeCategories returns an option for every category', () => {
+    const categories = service.getIncomeCategories();
+
+    expect(Object.keys(categories)).toHaveLength(
+      Object.values(IncomeCategory).length,
+    );
+    expect(categories.hoghoogh).toEqual({
+      key: IncomeCategory.HOGHOOGH,
+      value: 'hoghoogh',
+    });
+  });
+
   it('findOneIncome passes through to the repository', async () => {
     incomeRepository.findOneByIdOrFail.mockResolvedValue({ id: 1 });
 

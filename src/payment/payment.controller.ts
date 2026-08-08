@@ -33,6 +33,11 @@ import {
 export class PaymentController {
   constructor(private paymentService: PaymentService) {}
 
+  @Get('categories')
+  getPaymentCategories() {
+    return this.paymentService.getPaymentCategories();
+  }
+
   @Get()
   @UsePipes(new ZodValidationPipe(getAllPaymentsDtoSchema))
   async getAllPayments(

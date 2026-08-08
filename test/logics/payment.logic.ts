@@ -1,124 +1,111 @@
 import { Payment } from 'src/payment/entities/payment.entity';
-import { Income } from 'src/income/entities/income.entity';
 import { Account } from 'src/account/entities/account.entity';
 import { AccountDebt } from 'src/account-debt/entities/account-debt.entity';
 import { Paginated } from 'src/common/types/pagination.type';
-import { createTestAccounts } from './account.logic';
-import { makeAppReq } from './request.logic';
-import { signinTestUsers } from './auth/signin.logic';
 import { date } from 'src/common/tools/date/date.tool';
+import { PaymentCategory } from 'src/payment/enums/payment-category.enum';
+import { SignedInUserTest } from './auth/signin.logic';
+import { makeAppReq } from 'test/utils/request.logic';
 
-export async function createTestPayment(
-  makeReq: ReturnType<typeof makeAppReq>,
-) {
-  const { owner, relations } = await signinTestUsers(makeReq);
-  const {
-    after: accountAfter,
-    ownerAccount,
-    otherAccount,
-  } = await createTestAccounts(makeReq);
+export type TestPayment = {
+  price: Payment['amount'];
+  bankId: Account['bankId'];
+  unitId: Account['unitId'];
+  ownerId: Account['ownedBy'];
+  category: PaymentCategory;
+  isFun: Payment['isFun'];
+  isMaman: Payment['isMaman'];
+  paidAt: Payment['paidAt'];
+  description?: Payment['description'];
+  uncompletePaymentId?: Payment['uncompletePaymentId'];
+};
 
-  const funding = await makeReq<Income>({
-    method: 'post',
-    baseUrl: '/income',
-    token: owner.data.token,
-    body: {
-      accountId: otherAccount.data.id,
-      amount: 500,
-      category: 'HOGHOOGH',
-      paidAt: '2026-07-30 05:57:00',
-      description: 'funding for payment e2e',
-    },
-  });
-
-  expect(funding.success).toBeTruthy();
-
-  const payments = await makeReq<Payment[]>({
-    method: 'post',
-    baseUrl: '/payment',
-    token: owner.data.token,
-    body: {
-      price: 200,
-      bankId: ownerAccount.data.bankId,
-      unitId: ownerAccount.data.unitId,
-      ownerId: relations.data[0].id,
-      category: 'FOOD',
-      isFun: false,
-      isMaman: false,
-      paidAt: '2026-07-30 06:00:00',
-      description: 'payment e2e',
-    },
-  });
-
-  expect(payments.success).toBeTruthy();
-
-  const debitedPayment = payments.data.find(
-    (p) => p.accountId === otherAccount.data.id,
-  )!;
-
-  expect({
-    ...debitedPayment,
-    paidAt: date(debitedPayment.paidAt).format('YYYY-MM-DD HH:mm:ss'),
-  }).toMatchObject({
-    amount: 200,
-    category: 'FOOD',
-    description: 'payment e2e',
-    paidAt: '2026-07-30 06:00:00',
-    accountId: otherAccount.data.id,
-    remain: 300,
-  });
-
-  const debts = await makeReq<Paginated<AccountDebt>>({
-    method: 'get',
-    baseUrl: '/debt',
-    token: owner.data.token,
-    query: {
-      fromUserId: String(relations.data[1].id),
-      toUserId: String(relations.data[0].id),
-    },
-  });
-
-  const debt = debts.data.rows.find((d) => d.paymentId === debitedPayment.id);
-
-  expect(debt).toMatchObject({
-    amount: 200,
-    fromUserId: relations.data[1].id,
-    toUserId: relations.data[0].id,
-  });
-
-  let updatedAccount = await makeReq<Account>({
-    method: 'get',
-    token: owner.data.token,
-    baseUrl: `/account/${otherAccount.data.id}`,
-  });
-
-  expect(updatedAccount.data.ballance).toBe(300);
-
-  updatedAccount = await makeReq<Account>({
-    method: 'get',
-    token: owner.data.token,
-    baseUrl: `/account/${ownerAccount.data.id}`,
-  });
-
-  expect(updatedAccount.data.ballance).toBe(0);
+export function createTestPayment(makeReq: ReturnType<typeof makeAppReq>) {
+  let owner: SignedInUserTest['owner'] | null = null;
+  const created: Payment[] = [];
 
   return {
-    payments,
-    debt,
-    after: async () => {
-      for (const payment of payments.data) {
-        await makeReq({
-          method: 'delete',
-          baseUrl: `/payment/${payment.id}`,
+    test: async ({
+      users,
+      debitedAccount,
+      creditedAccount,
+      payment,
+    }: {
+      users: SignedInUserTest;
+      debitedAccount: Account;
+      creditedAccount?: Account;
+      payment: TestPayment;
+    }) => {
+      owner = users.owner;
+
+      const payments = await makeReq<Payment[]>({
+        method: 'post',
+        baseUrl: '/payment',
+        token: owner.data.token,
+        body: payment,
+      });
+
+      expect(payments.success).toBeTruthy();
+      created.push(...payments.data);
+
+      const debitedPayment = payments.data.find(
+        (p) => p.accountId === debitedAccount.id,
+      )!;
+
+      expect({
+        ...debitedPayment,
+        paidAt: date(debitedPayment.paidAt).format('YYYY-MM-DD HH:mm:ss'),
+      }).toMatchObject({
+        amount: payment.price,
+        category: payment.category,
+        ...(payment.description ? { description: payment.description } : {}),
+        paidAt: payment.paidAt,
+        accountId: debitedAccount.id,
+      });
+
+      if (creditedAccount) {
+        const creditedPayment = payments.data.find(
+          (p) => p.accountId === creditedAccount.id,
+        );
+
+        expect(creditedPayment).toMatchObject({
+          accountId: creditedAccount.id,
+          amount: 0,
+        });
+
+        const debts = await makeReq<Paginated<AccountDebt>>({
+          method: 'get',
+          baseUrl: '/debt',
           token: owner.data.token,
+          query: {
+            fromUserId: String(debitedAccount.ownedBy),
+            toUserId: String(creditedAccount.ownedBy),
+          },
+        });
+
+        const debt = debts.data.rows.find(
+          (d) => d.paymentId === debitedPayment.id,
+        );
+
+        expect(debt).toMatchObject({
+          amount: payment.price,
+          fromUserId: debitedAccount.ownedBy,
+          toUserId: creditedAccount.ownedBy,
         });
       }
-      await makeReq({
-        method: 'delete',
-        baseUrl: `/income/${funding.data.id}`,
-        token: owner.data.token,
-      });
-      await accountAfter();
+
+      return payments.data;
+    },
+    after: async () => {
+      return Promise.all(
+        created.map((payment) =>
+          makeReq({
+            method: 'delete',
+            baseUrl: `/payment/${payment.id}`,
+            token: owner?.data.token,
+          }),
+        ),
+      );
     },
   };
 }
