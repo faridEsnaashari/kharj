@@ -2,6 +2,11 @@ import { Payment } from 'src/payment/entities/payment.entity';
 import { Income } from 'src/income/entities/income.entity';
 import { Transaction } from '../types/transaction.type';
 import { TransactionType } from '../enums/transaction-type.enum';
+import { date } from 'src/common/tools/date/date.tool';
+
+function getPaidAtTime(paidAt: Transaction['paidAt']): number {
+  return paidAt ? date(paidAt).valueOf() : 0;
+}
 
 export function mergeAndSortByDate(
   payments: Payment[],
@@ -12,7 +17,9 @@ export function mergeAndSortByDate(
     ...incomes.map((i) => ({ ...i, type: TransactionType.INCOME })),
   ];
 
-  return merged.sort((a, b) => (a.paidAt < b.paidAt ? 1 : -1));
+  return merged.sort(
+    (a, b) => getPaidAtTime(b.paidAt) - getPaidAtTime(a.paidAt),
+  );
 }
 
 export function slicePage<T>(items: T[], page: number, size: number): T[] {

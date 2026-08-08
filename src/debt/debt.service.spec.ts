@@ -148,7 +148,7 @@ describe('DebtService', () => {
       expect(result.rows).toEqual([
         expect.objectContaining({ fromUserId: 1, toUserId: 2, amount: 100 }),
       ]);
-      expect(result.totals).toEqual({ owedToYou: 0, youOwe: 100 });
+      expect(result.totals).toEqual({ owedToYou: 100, youOwe: 0 });
     });
   });
 });

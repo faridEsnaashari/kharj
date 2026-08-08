@@ -22,7 +22,7 @@ debts automatically. The name "خرج" means "expense" in Persian.
   (`STAGE_MYSQL_HOST`, `STAGE_MYSQL_PORT`, `STAGE_MYSQL_USERNAME`,
   `STAGE_MYSQL_PASSWORD`, `STAGE_MYSQL_DATABASE`) — never the plain `MYSQL_...`
   variables. `databaseConfig.development` in
-  `src/common/ports/database/sequelize-cli.config.ts` (used whenever
+  `src/common/ports/database/database.config.ts` (used whenever
   `appConfigs.nodeEnv === 'develop'`) already reads from `STAGE_MYSQL_*`; the plain
   `MYSQL_*` variables back `production` and point at the real database.
 - **Never kill a server you didn't start yourself** — the user may have their own
@@ -191,6 +191,10 @@ src/
 │   │                                   Record<string, CategoryOption<PaymentCategory>>,
 │   │                                   e.g. gymFood: { key: PaymentCategory.GYM_FOOD,
 │   │                                   value: 'gym food' }; backs GET /payment/categories
+│   ├── commands/
+│   │   └── fill-paid-at.command.ts     cmd `fill-payment-paid-at` — sets `paid_at = created_at`
+│   │                                   where `paid_at IS NULL` (see Commander CLI under
+│   │                                   Tooling below); never run by Claude, user-run only
 │   └── entities/
 │       ├── payment.entity.ts
 │       └── repositories/
@@ -210,6 +214,9 @@ src/
 │   │   └── income-category.logic.ts    getIncomeCategoryOptions() — hardcoded
 │   │                                   Record<string, CategoryOption<IncomeCategory>>;
 │   │                                   backs GET /income/categories
+│   ├── commands/
+│   │   └── fill-paid-at.command.ts     cmd `fill-income-paid-at` — same as payment's, targets
+│   │                                   the `incomes` table
 │   └── entities/
 │       ├── income.entity.ts
 │       └── repositories/
@@ -272,6 +279,17 @@ src/
 │   └── logics/
 │       └── xlsx.logic.ts
 └── common/
+    ├── command/                        the `npm run commander <cmd>` CLI — see
+    │   │                                "Commander CLI" under Tooling below
+    │   ├── commander.ts                 entry point; also globs `src/**/*.command.ts`, so
+    │   │                                one-off command files (`*.command.ts`) can live
+    │   │                                anywhere in the tree, not just here
+    │   ├── types/
+    │   │   └── command.type.ts          Command = { runner, cmd, describe, flags? }
+    │   └── project-structure/
+    │       └── create.command.ts        cmd `create-new-module`
+    ├── commands/
+    │   └── correct-timestamps.command.ts  cmd `correct-timestamps`
     ├── filters/
     │   └── http-exceptions.filter.ts
     ├── gaurds/
@@ -283,6 +301,8 @@ src/
     ├── ports/
     │   └── database/
     │       ├── database.module.ts
+    │       ├── database.config.ts      databaseConfig.development/test/production — see the
+    │       │                           STAGE-DB Working Rule above
     │       ├── database-connection.logger.ts   logs host:port/db once on bootstrap
     │       ├── common-repository/
     │       │   └── common-repository.ts    base CRUD + pagination + count
@@ -906,6 +926,51 @@ worktree-nested tests are never discovered regardless of what other worktrees ex
 ever reappears, first rule out both known causes before suspecting Sequelize itself: an async
 `describe` callback (previous entry) or a stray worktree somehow bypassing this ignore pattern.
 
+### Tooling — Commander CLI & Git Hooks
+
+**Commander CLI** (`src/common/command/commander.ts`, run via `npm run commander <cmd>`):
+a small yargs-based runner, not a Nest controller/route. On boot it globs
+`src/**/*.command.ts` — a command file can live anywhere in the tree (next to the
+module it operates on, e.g. `src/payment/commands/fill-paid-at.command.ts`, or under
+`src/common/command/`/`src/common/commands/` for cross-module ones), it doesn't need to
+be registered anywhere else. Each file exports a `command: Command`
+(`src/common/command/types/command.type.ts`): `{ runner(appContext, argv) => Promise<{
+isSuccess, error }>, cmd, describe, flags? }`. `commander.ts` matches `command.cmd`
+against `process.argv[2]`, then calls `runner` with a real
+`NestFactory.createApplicationContext(AppModule)` — so a command has full access to
+every provider (repositories, services) the same way a controller would, just without
+HTTP. `flags` (optional, `Record<string, yargs.Options>`) are exposed as extra CLI args
+via yargs. Existing commands: `create-new-module`, `correct-timestamps`,
+`fill-payment-paid-at`, `fill-income-paid-at`, `fill-type`.
+
+`commander.ts` loads `.env` itself via `dotenv`'s `config()` — added as the very first
+lines of the file, before any other import — because unlike the real app
+(`src/main.ts` already calls `dotenv.config()` at its own top), `npm run commander` runs
+`commander.ts` directly through `ts-node`, never through `main.ts`'s bootstrap. Without
+that call, every `process.env.STAGE_MYSQL_*`/`MYSQL_*` read inside `databaseConfig`
+(`src/common/ports/database/database.config.ts`) would come back `undefined` and
+silently fall back to that file's hardcoded defaults (`'root'`/`'pass'`/`'test'`) instead
+of the real STAGE or production credentials — this is what caused `npm run commander` to
+fail to connect (or silently connect to the wrong database) before this was added; it
+had nothing to do with the app's own database connection, since `main.ts` was already
+loading `.env` correctly.
+
+Per the STAGE-DB Working Rule at the top of this file: **never actually run a
+schema/data-mutating command yourself**, including these — write the command file,
+confirm it builds, and stop. Read-only commands are fine to run for debugging.
+
+**Git hooks** (`.husky/`, installed manually — see the frontend's Tooling section for
+the contrast with its automatic `prepare` script):
+
+- `pre-commit` — `npm run lint`
+- `commit-msg` — `npx commitlint --edit "$1"` against `commitlint.config.ts`
+  (Conventional Commits, same convention as the frontend's `commitlint.config.js`)
+- `pre-push` — `npm run test` then `npm run test:e2e`. This means a `git push` blocks
+  until the **full** unit suite and the **full** E2E suite (`--runInBand`, real STAGE
+  database, see E2E tests above) both pass — expect pushes to take noticeably longer
+  than a commit, and to fail outright if `STAGE_MYSQL_*`/`E2E_TEST_USER_*` aren't set up
+  in the local `.env`.
+
 ### Running the Backend
 
 Run from this directory (`kharj/`):
@@ -985,10 +1050,11 @@ file) that renders:
   header/profile screen),
 - `<Routes>` inside `<div className="app-content">` — `/` → `Dashboard`,
   `/payment` → `Payment`, `/income` → `Income`, `/exchange` → `Exchange`,
-  `/inbox` → `Inbox`, `/accounts` → `Accounts`, `/debts` → `Debts`, `*` →
-  redirect to `/` — there is no `/accounts/:id` route: opening one account is
-  a modal (`AccountDetailsModal`) over the list, not a navigation, so it never
-  needed its own URL,
+  `/inbox` → `Inbox`, `/accounts` → `Accounts`, `/debts` → `Debts`,
+  `/transactions` → `Transactions`, `*` → redirect to `/` — there is no
+  `/accounts/:id` route: opening one account is a modal
+  (`AccountDetailsModal`) over the list, not a navigation, so it never needed
+  its own URL,
 - `<BottomNav tabs={NAV_TABS} />` — the persistent tab bar, shown on every
   authenticated page.
 
@@ -999,17 +1065,22 @@ Visly mockup screen puts it in a top-level nav). Add a `NAV_TABS` entry (also
 in `App.jsx`) — `{ key, label, icon, path }` — only when actually asked for
 one; that's the whole integration, `BottomNav`
 (`shared/components/BottomNav.jsx`) is generic and needs no changes per tab.
-`NAV_TABS` currently has Home, Payment, Income, Exchange and Inbox — `Inbox`
-is deliberately reachable both ways (a `NAV_TABS` tab *and* the dashboard's
-"Excel Import" `ActionButtons` tile still navigate to the same `/inbox`
+`NAV_TABS` currently has Home, Payment, Income, Transactions and Inbox —
+`Transactions` (→ `/transactions`, `IconList`) took `Exchange`'s old bottom-nav
+slot; `Exchange` itself was **not** removed, it just dropped back to
+`ActionButtons`-tile-only access (see below), same as `Accounts`/`Debts`.
+`Inbox` is deliberately reachable both ways (a `NAV_TABS` tab *and* the
+dashboard's "Inbox" `ActionButtons` tile still navigate to the same `/inbox`
 route); `Debts` was moved out of `NAV_TABS` into an `ActionButtons` tile
-instead (see below) rather than staying a persistent tab. Profile gets added
-to `NAV_TABS` the same way once that page exists — don't add placeholder tabs
+instead rather than staying a persistent tab. Profile gets added to
+`NAV_TABS` the same way once that page exists — don't add placeholder tabs
 for pages that don't exist yet.
 
 **Dashboard `ActionButtons` tiles** (`features/dashboard/components/ActionButtons.jsx`):
-Pay, Income, Exchange, Excel Import (→ `/inbox`), Accounts (→ `/accounts`),
-Debts (→ `/debts`) — a 6th tile, wrapping to 4 + 2 in the `.dashboard-actions`
+Pay, Income, Transactions (→ `/transactions`), Exchange, Inbox (→ `/inbox`,
+tile label reads "Inbox" not "Excel Import" — same destination, the label was
+renamed to match what the tile actually opens), Accounts (→ `/accounts`),
+Debts (→ `/debts`) — a 7th tile, wrapping to 4 + 3 in the `.dashboard-actions`
 grid. Same rule as `NAV_TABS`: add a tile only when a page is meant to be
 reached this way, not preemptively.
 
@@ -1073,7 +1144,6 @@ src/
 ├── App.css
 ├── main.jsx
 ├── index.css
-├── api.config.js                   duplicate of features/auth/api/api.config.js — prefer the feature copy
 ├── core/                           empty placeholder
 ├── features/
 │   ├── auth/
@@ -1108,12 +1178,13 @@ src/
 │   │   │                           activity type filter state; delegates calculation to logic/
 │   │   ├── components/
 │   │   │   ├── UnitCard.jsx        balance + weekly income/payment for one unit
-│   │   │   └── ActionButtons.jsx   Pay / Income / Exchange / Excel Import / Accounts / Debts
-│   │   │                           tiles — `onPay` navigates to `/payment`, `onIncome` to
-│   │   │                           `/income`, `onExchange` to `/exchange`, `onExcelImport` to
-│   │   │                           `/inbox`, `onAccounts` to `/accounts`, `onDebts` to `/debts`;
+│   │   │   └── ActionButtons.jsx   Pay / Income / Transactions / Exchange / Inbox / Accounts /
+│   │   │                           Debts tiles — `onPay` navigates to `/payment`, `onIncome` to
+│   │   │                           `/income`, `onTransactions` to `/transactions`, `onExchange`
+│   │   │                           to `/exchange`, `onExcelImport` to `/inbox` (tile label reads
+│   │   │                           "Inbox"), `onAccounts` to `/accounts`, `onDebts` to `/debts`;
 │   │   │                           a 4-column grid (`.dashboard-actions` in dashboard.css) so
-│   │   │                           the 6 tiles wrap 4 + 2
+│   │   │                           the 7 tiles wrap 4 + 3
 │   │   └── styles/
 │   │       └── dashboard.css       horizontally-scrollable unit-card row (touch carousel,
 │   │                               same pattern as the mockup's "Your Accounts" section)
@@ -1128,11 +1199,12 @@ src/
 │   │   ├── index.js
 │   │   ├── api/
 │   │   │   └── accounts.api.js     listAccounts({page, size, bankId, unitId, ownedBy}),
-│   │   │                           getAccount(id), createAccount(dto) — distinct from
-│   │   │                           shared/api/lookups.api.js's `getAccounts`, which is a
-│   │   │                           size-1 "resolve the one account a Bank+Unit+Owner triple
-│   │   │                           identifies" lookup for create-transaction forms, not a
-│   │   │                           full paginated listing
+│   │   │                           getAccount(id), createAccount(dto), and `getAccounts`
+│   │   │                           ({bankId, unitId, ownedBy, userId}) — a size-1 "resolve the
+│   │   │                           one account a Bank+Unit+Owner triple identifies" lookup used
+│   │   │                           by every create-transaction form (payments/, income/,
+│   │   │                           exchange/, inbox/ all import it cross-feature from here),
+│   │   │                           distinct from `listAccounts`'s full paginated listing
 │   │   ├── logic/
 │   │   │   └── accounts.logic.js   getAccountLabel, getAccountOwnerName,
 │   │   │                           isCreateAccountFormValid, buildCreateAccountPayload
@@ -1169,7 +1241,13 @@ src/
 │   │   │   │                       inside it is itself an interactive element
 │   │   │   ├── CreateAccountModal.jsx  bottom-sheet-over-`useDismiss` pattern (see inbox/'s
 │   │   │   │                          ConvertModal); Bank/Unit/Owner selects + initial balance
-│   │   │   │                          + priority, `POST /account`
+│   │   │   │                          + priority, `POST /account`; `useAccountsPage.js`'s
+│   │   │   │                          `openCreate()` seeds `form.ownerId` to
+│   │   │   │                          `relatedUsers[0]?.id` each time the modal opens (same
+│   │   │   │                          default-to-self convention as usePaymentPage.js — see
+│   │   │   │                          above), not in the `loadOptions` effect like the other
+│   │   │   │                          forms, since this form doesn't exist until the FAB opens
+│   │   │   │                          it, well after `relatedUsers` has already loaded
 │   │   │   └── AccountDetailsModal.jsx  same bottom-sheet pattern; one account's
 │   │   │                               Bank/Unit/Owner/Balance/Priority + a RecentActivityList
 │   │   │                               scoped to exactly that account (via the `ownedBy`
@@ -1197,17 +1275,29 @@ src/
 │   │   │                           (the same Bank/Unit selects double as the list's filter —
 │   │   │                           no separate filter UI; capped at 5 rows)
 │   │   ├── index.js
+│   │   ├── api/
+│   │   │   └── payment.api.js      createPayment(dto), getPaymentCategories() — payments/ owns
+│   │   │                           both; `inbox/` imports `getPaymentCategories` (and
+│   │   │                           `createPayment`) from here directly for its convert flow,
+│   │   │                           same cross-feature-import pattern as `getAccounts` in
+│   │   │                           accounts/ — see "Feature-owned APIs used by other features"
+│   │   │                           below
 │   │   ├── logic/
 │   │   │   └── payment.logic.js    isPaymentFormValid, buildCreatePaymentPayload (composes
 │   │   │                           Date+Time into `paidAt`), getSelectedAccountBalance
 │   │   ├── hooks/
-│   │   │   └── usePaymentPage.js   loads banks/units/relatedUsers once; owns form state; looks
-│   │   │                           up the selected account's balance once Bank+Unit+Owner are
-│   │   │                           all picked; owns the activity list (refetches on
-│   │   │                           bankId/unitId change); handles submit + refetch-after-create
-│   │   │                           — `createPayment` and the Bank/Unit/Owner/Account lookups
-│   │   │                           come from `shared/api/` (see below), payments/ has no
-│   │   │                           `api/` folder of its own anymore
+│   │   │   └── usePaymentPage.js   loads banks/units/relatedUsers/categories once (via
+│   │   │                           bank/, unit/, user/ and this feature's own api/); defaults
+│   │   │                           `form.ownerId` to `relatedUsers[0].id` once that list loads
+│   │   │                           — `GET /user/related-user`'s first row is always the
+│   │   │                           signed-in user's own entry (see the E2E `signin.logic.ts`
+│   │   │                           note above, which relies on the same fact), so every owner
+│   │   │                           field in this app defaults to "myself" rather than forcing
+│   │   │                           an explicit pick every time); owns form state; looks up the
+│   │   │                           selected account's balance (via accounts/'s `getAccounts`)
+│   │   │                           once Bank+Unit+Owner are all picked; owns the activity list
+│   │   │                           (refetches on bankId/unitId change); handles submit +
+│   │   │                           refetch-after-create
 │   │   ├── components/
 │   │   │   └── PaymentForm.jsx     Bank/Unit/Owner/Category/Price/Date+Time/Description
 │   │   │                           fields, submit button (backend's `isFun`/`isMaman`
@@ -1219,6 +1309,9 @@ src/
 │   │   ├── Income.jsx              create-income form + a live-filtered RecentActivityList,
 │   │   │                           same layout/pattern as Payment.jsx (also capped at 5 rows)
 │   │   ├── index.js
+│   │   ├── api/
+│   │   │   └── income.api.js       createIncome(dto), getIncomeCategories() — same pattern as
+│   │   │                           payments/api/payment.api.js; `inbox/` imports both directly
 │   │   ├── logic/
 │   │   │   └── income.logic.js     isIncomeFormValid, buildCreateIncomePayload,
 │   │   │                           getSelectedAccount — unlike Payment, `CreateIncomeDto`
@@ -1232,7 +1325,7 @@ src/
 │   │   ├── hooks/
 │   │   │   └── useIncomePage.js    same shape as usePaymentPage.js, keeps the whole resolved
 │   │   │                           account (not just its balance) since accountId is needed
-│   │   │                           at submit time; `createIncome` comes from `shared/api/`
+│   │   │                           at submit time
 │   │   ├── components/
 │   │   │   └── IncomeForm.jsx      Bank/Unit/Owner/Category/Amount/Date+Time/Description
 │   │   │                           fields, submit button
@@ -1244,10 +1337,10 @@ src/
 │   │   │                           (capped at 5 rows)
 │   │   ├── index.js
 │   │   ├── api/
-│   │   │   └── exchange.api.js     createExchange(dto) — kept feature-local (unlike
-│   │   │                           createPayment/createIncome) since only Exchange calls it;
-│   │   │                           Bank/Unit/Owner/Account lookups still come from
-│   │   │                           shared/api/lookups.api.js
+│   │   │   └── exchange.api.js     createExchange(dto) — kept feature-local since only
+│   │   │                           Exchange calls it (unlike payment.api.js/income.api.js,
+│   │   │                           which inbox/ also needs); Bank/Unit/Owner/Account lookups
+│   │   │                           come from bank/, unit/, user/, accounts/
 │   │   ├── logic/
 │   │   │   └── exchange.logic.js   isExchangeFormValid, buildCreateExchangePayload,
 │   │   │                           getSelectedAccount — like income.logic.js,
@@ -1258,13 +1351,19 @@ src/
 │   │   │                           Lookups sections above)
 │   │   ├── hooks/
 │   │   │   └── useExchangePage.js  same shape as usePaymentPage.js, but resolves two accounts
-│   │   │                           (`fromAccount`/`toAccount`) independently; also re-fetches
-│   │   │                           `toBanks`/`toUnits` (via `lookups.api.js`'s `userId` param)
-│   │   │                           whenever the "To" book (`form.toUserId`) changes, since a
-│   │   │                           related user's book can have different user-defined
+│   │   │                           (`fromAccount`/`toAccount`) independently, and defaults
+│   │   │                           *both* `fromOwnerId` and `toOwnerId` to `relatedUsers[0].id`
+│   │   │                           (both Owner selects share the same `relatedUsers` list —
+│   │   │                           see usePaymentPage.js above); also re-fetches
+│   │   │                           `toBanks`/`toUnits` (via bank/unit's `getBanks`/`getUnits`
+│   │   │                           `userId` param) whenever the "To" book (`form.toUserId`)
+│   │   │                           changes, since a related user's book can have different
+│   │   │                           user-defined
 │   │   │                           banks/units than the caller's own — `setToUserId` (not
 │   │   │                           plain `setField`) clears the now-stale
-│   │   │                           toBankId/toUnitId/toOwnerId whenever the book changes
+│   │   │                           toBankId/toUnitId/toOwnerId whenever the book changes (so
+│   │   │                           the default doesn't survive a book switch, deliberately —
+│   │   │                           the previous owner may not exist in the new book)
 │   │   ├── components/
 │   │   │   └── ExchangeForm.jsx    two `Section`s ("From"/"To"), each
 │   │   │                           Bank/Unit/Owner/Balance/Amount, plus a "To"-only "Book"
@@ -1290,7 +1389,11 @@ src/
 │   │   │                           getPendingAccountLabel, getPendingOwnerName,
 │   │   │                           getPendingSubtitle, buildConvertInitialForm (splits
 │   │   │                           `paidAt` into date/time; seeds `ownerId` from the row's
-│   │   │                           account owner but it stays user-editable in the modal;
+│   │   │                           account owner but it stays user-editable in the modal —
+│   │   │                           deliberately **not** defaulted to `relatedUsers[0]` like
+│   │   │                           every other Owner field in this app, since the row's
+│   │   │                           original owner (from the actual imported bank data) is a
+│   │   │                           more useful default here than "myself" would be;
 │   │   │                           `description` starts empty — it's a separate,
 │   │   │                           user-authored field, not prefilled from the row's own
 │   │   │                           parsed `description`, which the modal shows read-only
@@ -1309,7 +1412,7 @@ src/
 │   │   │                           wants a concrete `accountId` — so when the picked owner
 │   │   │                           differs from the row's original account owner
 │   │   │                           (`isConvertOwnerChanged`), `useInboxPage.js` resolves the
-│   │   │                           right account first via `shared/api/lookups.api.js`'s
+│   │   │                           right account first via accounts/'s
 │   │   │                           `getAccounts({bankId, unitId, ownedBy})` (same lookup
 │   │   │                           every create-transaction form already uses) before
 │   │   │                           building the payload; unchanged-owner conversions skip
@@ -1322,8 +1425,8 @@ src/
 │   │   │                           shared/hooks/usePaginatedList.js (10 at a time); and the
 │   │   │                           convert modal's open row/form state — resolves the account
 │   │   │                           (see inbox.logic.js above) and dispatches `createIncome`
-│   │   │                           or `createPayment` (both from `shared/api/`) based on the
-│   │   │                           row's `type`
+│   │   │                           (from income/api/income.api.js) or `createPayment` (from
+│   │   │                           payments/api/payment.api.js) based on the row's `type`
 │   │   ├── components/
 │   │   │   ├── InboxFilters.jsx    Bank `Select` with a real "All" option (same reasoning as
 │   │   │   │                       accounts/'s AccountFilters.jsx)
@@ -1366,48 +1469,74 @@ src/
 │   │   └── styles/
 │   │       └── inbox.css
 │   ├── debts/
-│   └── transaction/                 no page/route of its own — see "Feature folders without a
-│       │                            page" below
-│       ├── index.js                 barrel: RecentActivityList, getRecentActivity,
-│       │                            ACTIVITY_FILTERS
-│       ├── api/
-│       │   └── transaction.api.js   getRecentActivity({ type, bankId, unitId, page, size })
-│       ├── logic/
-│       │   └── transaction.logic.js ACTIVITY_FILTERS + transaction-rendering rules (title,
-│       │                            subtitle, signed amount, source label)
-│       └── components/
-│           └── RecentActivityList.jsx  filterable (All/Income/Pay) transaction list —
-│                                       consumed by dashboard, payments, income, exchange and
-│                                       accounts (via `../../transaction` / `../transaction`
-│                                       imports, not `shared/`)
+│   ├── transaction/                 has its own page (`Transactions.jsx`, the full filterable
+│   │   │                            transaction list) but is still the shared home for
+│   │   │                            `RecentActivityList`/`getRecentActivity`/`ACTIVITY_FILTERS`
+│   │   │                            consumed by other pages — see "Feature-owned APIs used by
+│   │   │                            other features" below; owning a page never disqualified that,
+│   │   │                            `accounts/`/`payments/`/`income/` already did the same
+│   │   ├── Transactions.jsx         infinite-scrolling (10 at a time, same
+│   │   │                           `usePaginatedList`/`useIntersectionLoadMore` pattern as
+│   │   │                           `Inbox.jsx`) transaction list with Type/Bank/Unit/Owner
+│   │   │                           filters — the "all transactions, all filters" page; reached
+│   │   │                           via `NAV_TABS` and the dashboard's Transactions tile, not
+│   │   │                           just the capped 5-row `RecentActivityList` other pages embed
+│   │   ├── index.js                 barrel: Transactions, RecentActivityList, getRecentActivity,
+│   │   │                            ACTIVITY_FILTERS
+│   │   ├── api/
+│   │   │   └── transaction.api.js   getRecentActivity({ type, bankId, unitId, ownedBy, page,
+│   │   │                            size })
+│   │   ├── logic/
+│   │   │   └── transaction.logic.js ACTIVITY_FILTERS + transaction-rendering rules —
+│   │   │                            getTransactionCategory (row title), getTransactionDescription
+│   │   │                            (row subtitle, falls back to `'-'` when empty, never omitted),
+│   │   │                            getTransactionDateTime (row caption — ListRow's third,
+│   │   │                            smallest text line, added specifically for this), plus
+│   │   │                            getSignedTransactionAmount and getTransactionSourceLabel
+│   │   │                            (bank·unit, shown in the trailing column, not a text line)
+│   │   ├── hooks/
+│   │   │   └── useTransactionsPage.js  owns Type/Bank/Unit/Owner filters + the paginated list
+│   │   │                              (via `usePaginatedList`, 10 at a time); loads
+│   │   │                              banks/units/relatedUsers options once, same shape as
+│   │   │                              `useAccountsPage.js`
+│   │   ├── components/
+│   │   │   ├── RecentActivityList.jsx  filterable (All/Income/Pay) capped transaction list —
+│   │   │   │                          consumed by dashboard, payments, income, exchange and
+│   │   │   │                          accounts (via `../../transaction` / `../transaction`
+│   │   │   │                          imports, not `shared/`); renders rows via TransactionRow.jsx
+│   │   │   ├── TransactionRow.jsx      one transaction's `ListRow` (category/description/date ·
+│   │   │   │                          time, bank·unit + signed amount trailing) — extracted so
+│   │   │   │                          `RecentActivityList` and `Transactions.jsx` render rows
+│   │   │   │                          identically instead of duplicating the markup
+│   │   │   └── TransactionFilters.jsx  Bank/Unit/Owner `Select`s with a real "All" option (same
+│   │   │                              pattern as accounts/'s AccountFilters.jsx) plus a Type
+│   │   │                              `ChipGroup`; `Transactions.jsx`-only, `RecentActivityList`
+│   │   │                              keeps its own inline `ChipGroup` since it has no
+│   │   │                              Bank/Unit/Owner selects of its own
+│   │   └── styles/
+│   │       └── transaction.css      `.transaction-row__trailing`/`.transaction-row__source`
+│   │                                (moved here from dashboard.css once transaction rows had
+│   │                                their own feature-owned component) plus `.transactions*`
+│   │                                page-layout classes, same shape as accounts.css
+│   ├── bank/                        no page/route of its own — see "Feature folders without a
+│   │   │                            page" below
+│   │   └── api/
+│   │       └── bank.api.js          getBanks({ userId }) — used by dashboard, accounts,
+│   │                                payments, income, exchange, inbox, debts (every feature
+│   │                                that needs a Bank `Select`)
+│   ├── unit/                        no page/route of its own, same as bank/
+│   │   └── api/
+│   │       └── unit.api.js          getUnits({ userId }) — same callers as bank/
+│   └── user/                        no page/route of its own, same as bank/
+│       └── api/
+│           └── user.api.js          getRelatedUsers() — same callers as bank/; unrelated to
+│                                     `features/auth/`, which owns sign-in, not related-users
 └── shared/
     ├── components/                 Design-system components (see below)
     │   ├── index.js                barrel — import from here, not from files
     │   ├── icons.jsx                inline stroke icons, inherit currentColor
     │   └── BottomNav.jsx           persistent tab bar, generic over a `tabs` prop (see
     │                               Routing & Navigation)
-    ├── api/
-    │   ├── lookups.api.js          getBanks({ userId }), getUnits({ userId }),
-    │   │                           getRelatedUsers(), getAccounts({ bankId, unitId, ownedBy,
-    │   │                           userId }) — reference-data lookups shared by every
-    │   │                           create-transaction form; promoted out of
-    │   │                           payments/api/payment.api.js once income/ needed the exact
-    │   │                           same ones. `userId` on all three is optional and only matters for
-    │   │                           exchange/'s "To" side — see Cross-Book Lookups above; every
-    │   │                           other caller omits it and gets their own book, unchanged
-    │   └── create-transaction.api.js  createPayment(dto), createIncome(dto) — promoted out of
-    │                               payments/api/ and income/api/ once inbox/'s convert flow
-    │                               needed to call both from a third feature; `createExchange`
-    │                               stayed feature-local in exchange/api/ since nothing else
-    │                               calls it
-    ├── constants/
-    │   ├── paymentCategories.js    PAYMENT_CATEGORIES — hardcoded, mirrors the backend
-    │   │                           PaymentCategory enum (no categories endpoint exists; see
-    │   │                           Shared Conventions for keeping these in sync); promoted out
-    │   │                           of payments/constants/ once inbox/'s convert modal needed
-    │   │                           it too (same graduation rule as create-transaction.api.js)
-    │   └── incomeCategories.js     INCOME_CATEGORIES — same story, promoted out of
-    │                               income/constants/
     ├── hooks/
     │   ├── useDismiss.js           outside-click + Escape dismissal for popovers
     │   ├── usePaginatedList.js     generic "fetch a page, accumulate rows, load more" state —
@@ -1467,38 +1596,47 @@ display — gets its own `logic/<feature>.logic.js`, e.g.
 - **Once a feature's `logic/`/`api/` is genuinely reused by a second feature,
   it graduates out of that feature's own folders** — not before (don't
   pre-promote something only one feature uses). Where it graduates *to*
-  depends on what it is: `shared/` is for genuinely generic, domain-agnostic
-  code (date/number formatting, the design system) that any feature could
-  plausibly need; a reused *domain* concept instead gets its own feature
-  folder that other features import from directly, even if it has no page of
-  its own — see "Feature folders without a page" below.
-  `shared/api/lookups.api.js` (`getBanks`/`getUnits`/`getRelatedUsers`/
-  `getAccounts`) is the `shared/`-bound example: it started in
-  `payments/api/payment.api.js`, then `income/` needed the exact same
-  Bank/Unit/Owner/Account lookups, so it moved up — these lookups aren't a
-  domain of their own, they're generic reference-data fetches any
-  create-transaction form needs. `features/transaction/` is the other kind:
-  `RecentActivityList` started as dashboard-only, then Payment/Income/
-  Exchange/Accounts needed the exact same rendering rules and data fetch —
-  but "recent activity" is a real domain concept (the payment+income
-  transaction feed), not generic UI-kit code, so it graduated into its own
-  `features/transaction/` instead of `shared/`, and every consuming feature
-  imports it from there.
-  `shared/api/create-transaction.api.js` (`createPayment`/`createIncome`) is
-  a `shared/`-bound example too: `payments/` and `income/` each held their
-  own copy until `inbox/`'s convert modal needed both create calls from a
-  third feature, so it moved up — `payments/`/`income/` now have no `api/`
-  folder of their own at all, only `logic/`, `hooks/`, `components/` and
-  `styles/`. `exchange/api/exchange.api.js`'s `createExchange` deliberately
-  did **not** graduate — nothing but `exchange/` calls it, so promoting it
-  would be the "pre-promote something only one feature uses" mistake this
-  rule warns against. Payment/income categories are **not** a
-  constants-graduation example anymore — they were a hand-maintained
+  depends on what it is, and **`shared/` is reserved for genuinely generic,
+  domain-agnostic code that carries no business meaning of its own** —
+  date/number formatting, the design system, `usePaginatedList`. An API call
+  almost never qualifies just because several features happen to call it:
+  `getBanks`/`getUnits`/`getRelatedUsers` are still "the Bank feature", "the
+  Unit feature", "the User feature" reference data even when five other
+  features fetch them, so each lives in its own page-less feature folder
+  (`features/bank/api/bank.api.js`, `features/unit/api/unit.api.js`,
+  `features/user/api/user.api.js` — see "Feature folders without a page"
+  below) rather than `shared/api/`, and every caller imports directly from
+  there. `getAccounts` (the size-1 create-transaction-form lookup) belongs to
+  `accounts/` the same way — it's exported alongside `listAccounts`/
+  `getAccount`/`createAccount` from `accounts/api/accounts.api.js`, even
+  though `accounts/` has its own page and `bank/`/`unit/`/`user/` don't (see
+  "Feature-owned APIs used by other features" below — owning a page doesn't
+  disqualify a feature's `api/` from being imported elsewhere). Likewise
+  `createPayment`/`getPaymentCategories` live in `payments/api/payment.api.js`
+  and `createIncome`/`getIncomeCategories` in `income/api/income.api.js` —
+  `inbox/`'s convert flow imports all four straight from their owning
+  features. **`shared/` has no `api/` folder at all** — there is no "2+
+  features call it" escape hatch into `shared/api/` anymore; that just means
+  a cross-feature import of whichever feature's `api/` file actually owns it.
+  `features/transaction/` set this pattern early on (back when it was still
+  page-less): `RecentActivityList`/`getRecentActivity`/`ACTIVITY_FILTERS` are
+  a real business concept (the payment+income transaction feed), not generic
+  UI-kit code, so it got its own feature folder rather than `shared/api/`
+  even though it now also has its own page (see "Feature folders without a
+  page" and "Feature-owned APIs used by other features" below for both
+  halves of that). `exchange/api/exchange.api.js`'s `createExchange` deliberately has
+  **not** graduated anywhere — nothing but `exchange/` calls it, so it stays
+  put; the mistake this rule warns against is pre-promoting something only
+  one feature uses, not any particular destination. Payment/income categories
+  are **not** a constants-graduation example — they were a hand-maintained
   `PAYMENT_CATEGORIES`/`INCOME_CATEGORIES` constants list at one point, but
   are now fetched from `GET /payment/categories`/`GET /income/categories`
   (backed by `src/payment/logics/payment-category.logic.ts` /
   `src/income/logics/income-category.logic.ts` on the backend) and reshaped
-  by `shared/lib/categories.js`'s `categoriesToOptions`; there is no
+  by `shared/lib/categories.js`'s `categoriesToOptions` — the one piece of
+  this that *is* genuinely generic (reshaping a `{key,value}` map into
+  `Select` options, with no idea what the keys/values actually mean), which
+  is exactly why that part alone stays in `shared/lib/`. There is no
   `shared/constants/` directory.
 
 Not every feature needs a `logic/` folder — `auth/` doesn't have one yet
@@ -1509,34 +1647,67 @@ calculation or transformation to put in it, same as the backend only adds a
 
 #### Feature folders without a page
 
-`features/` normally means "a routed page" — every other folder under
-`features/` has a top-level `<Name>.jsx` wired to a `<Route>` in `App.jsx`.
-`features/transaction/` is the one exception: it has no page, no route, and
-no entry in `App.jsx` at all — just `api/`, `logic/`, and `components/`,
-exported through its own `index.js` barrel, the same shape any other
-feature's non-page folders take.
+`features/` normally means "a routed page" — most folders under `features/`
+have a top-level `<Name>.jsx` wired to a `<Route>` in `App.jsx`. Three don't:
+`bank/`, `unit/`, `user/` — each has no page, no route, and no entry in
+`App.jsx` at all, just an `api/`. They currently hold nothing but
+`api/bank.api.js`/`api/unit.api.js`/`api/user.api.js` (no barrel needed for a
+single named export — callers import the function directly, e.g.
+`import { getBanks } from '../../bank/api/bank.api'`). `transaction/` used
+to be the canonical example of this pattern but graduated out of it once
+`Transactions.jsx` (the "all transactions, all filters" page) was added — it
+still has more than one export worth barrelling through `index.js`, same as
+before, just with a page alongside them now (see "Feature-owned APIs used by
+other features" below for how its still-shared `RecentActivityList`/
+`getRecentActivity`/`ACTIVITY_FILTERS` coexist with owning a page).
 
 The distinction that decides whether reused code becomes a page-less feature
 folder like this or graduates to `shared/` (see Domain Logic vs
 Infrastructure above) is **domain-specific vs. generic**: `shared/` is for
 code any feature could plausibly need regardless of what it's about (date
-formatting, the design system, generic reference-data lookups). Code that
-*is* a real business concept — "the payment+income transaction feed" for
-`transaction/`, `RecentActivityList`, `getRecentActivity`,
-`ACTIVITY_FILTERS` — stays out of `shared/` even once several features use
-it, because dumping domain logic into `shared/` makes `shared/` itself
-untrustworthy as "generic, safe to reuse blindly." It gets a `features/`
-folder instead, and other features are allowed to import from it directly
-(`import { RecentActivityList } from '../transaction'` /
-`'../../transaction'` depending on depth) — the usual "features don't import
-from other features, only from `shared/`" expectation doesn't apply to this
-kind of folder, since it isn't a page and can't create a routing/state
-coupling the way importing from another page-owning feature would.
+formatting, the design system, generic hooks). Code that *is* a real
+business concept — "a bank" for `bank/`, "a related user" for `user/` — stays
+out of `shared/` even once every other feature uses it, because dumping
+domain logic into `shared/` makes `shared/` itself untrustworthy as
+"generic, safe to reuse blindly." It gets a `features/` folder instead.
 
 Only create one of these when a second feature actually needs the first
 feature's domain code — same promotion trigger as any other graduation, just
 a different destination. Don't invent an empty `features/<domain>/` folder
 speculatively.
+
+#### Feature-owned APIs used by other features
+
+A feature *with* its own page can still have its `api/` imported by another
+feature directly — owning a page doesn't make a feature's `api/` calls
+private. `accounts/api/accounts.api.js`'s `getAccounts` is imported by
+`payments/`, `income/`, `exchange/`, `inbox/`, and `debts/`; `payments/api/
+payment.api.js`'s `createPayment`/`getPaymentCategories` and `income/api/
+income.api.js`'s `createIncome`/`getIncomeCategories` are both imported by
+`inbox/`'s convert flow. None of this gets promoted to `shared/` or to a new
+page-less folder — `accounts/`, `payments/`, and `income/` already *are* the
+right home for this code (there's a real "Accounts" / "Payment" / "Income"
+page backing each), so a second feature needing the same API call is just a
+cross-feature import (`import { getAccounts } from '../../accounts/api/
+accounts.api'`), not a graduation trigger.
+
+This only ever applies to `api/` (plain, stateless async functions with no
+React state, no rendering, no routing). It does **not** extend to a page
+feature's `hooks/`, `hooks/`-owned state, or most `components/` — importing
+a component or hook from `payments/` into another feature would create real
+page-to-page coupling and isn't done anywhere in this codebase.
+`transaction/`'s `RecentActivityList` is the one deliberate exception: it's
+still imported by dashboard, payments, income, exchange and accounts even
+though `transaction/` now has its own page (`Transactions.jsx`) too. What
+makes it safe to cross-import despite that is that `RecentActivityList` is a
+plain, stateless presentational component — it takes `transactions`/
+`filter`/`onFilterChange`/`loading` as props and owns no state or API calls
+of its own, closer to a `shared/components` primitive than to a page-coupled
+component like `payments/`'s `PaymentForm` (which is wired directly into
+`usePaymentPage.js`'s state). The "features don't import from other
+features, only from `shared/` (or a page-less folder)" expectation still
+holds for everything except one feature's plain `api/` functions and this
+one stateless-component exception.
 
 ### Auth Flow
 

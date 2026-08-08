@@ -7,7 +7,6 @@
   "license": "UNLICENSED",
   "scripts": {
     "commander": "npx ts-node -r tsconfig-paths/register src/common/command/commander.ts",
-    "start:local": "./src/scripts/run-local.script.sh",
     "build": "nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "NODE_ENV=develop nest start",

@@ -223,7 +223,7 @@ describe('debt.logic', () => {
 
       const summary = buildDebtSummary(rows, 'bank', alice.id);
 
-      expect(summary.totals).toEqual({ owedToYou: 100, youOwe: 40 });
+      expect(summary.totals).toEqual({ owedToYou: 40, youOwe: 100 });
       expect(summary.rows).toHaveLength(2);
     });
 

@@ -5,7 +5,6 @@ export const databaseConfig = {
     username: process.env.STAGE_MYSQL_USERNAME || 'root',
     password: process.env.STAGE_MYSQL_PASSWORD || 'pass',
     database: process.env.STAGE_MYSQL_DATABASE || 'test',
-    dialect: 'mysql',
     timezone: process.env.DB_TIMEZONE || '+03:30',
     dialectOptions: {
       typeCast: process.env.DB_TYPE_CAST !== 'false',
@@ -19,7 +18,6 @@ export const databaseConfig = {
     username: process.env.MYSQL_USERNAME || 'root',
     password: process.env.MYSQL_PASSWORD || 'pass',
     database: process.env.MYSQL_DATABASE || 'test',
-    dialect: 'mysql',
     timezone: process.env.DB_TIMEZONE || '+03:30',
     dialectOptions: {
       typeCast: process.env.DB_TYPE_CAST !== 'false',
@@ -33,7 +31,6 @@ export const databaseConfig = {
     username: process.env.MYSQL_USERNAME || 'root',
     password: process.env.MYSQL_PASSWORD || 'pass',
     database: process.env.MYSQL_DATABASE || 'test',
-    dialect: 'mysql',
     timezone: process.env.DB_TIMEZONE || '+03:30',
     dialectOptions: {
       typeCast: process.env.DB_TYPE_CAST !== 'false',

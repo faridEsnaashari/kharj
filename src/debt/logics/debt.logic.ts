@@ -122,10 +122,10 @@ export function buildDebtSummary(
 
   const totals = netted.reduce(
     (acc, row) => {
-      if (row.toUserId === currentUserId) {
+      if (row.fromUserId === currentUserId) {
         acc.owedToYou += row.amount;
       }
-      if (row.fromUserId === currentUserId) {
+      if (row.toUserId === currentUserId) {
         acc.youOwe += row.amount;
       }
       return acc;
