@@ -11,6 +11,10 @@ import { IncomeRepository } from 'src/income/entities/repositories/income.reposi
 import { AccountRepository } from 'src/account/entities/repositories/account.repository';
 import { PaymentCategory } from 'src/payment/enums/payment-category.enum';
 import { IncomeCategory } from 'src/income/enums/income-category.enum';
+import { Sequelize } from 'sequelize-typescript';
+import { PaymentModel } from 'src/payment/entities/payment.entity';
+import { IncomeModel } from 'src/income/entities/income.entity';
+import { AccountModel } from 'src/account/entities/account.entity';
 
 @Injectable()
 export class ExchangeService {
@@ -19,34 +23,21 @@ export class ExchangeService {
     private paymentRepository: PaymentRepository,
     private incomeRepository: IncomeRepository,
     private accountRepository: AccountRepository,
+    private seq: Sequelize,
   ) {}
 
   async createExchange(dto: CreateExchangeDto, user: User) {
-    const {
-      fromOwner,
-      toOwner,
-      toUser,
-      fromUnit,
-      toUnit,
-      fromAccount,
-      toAccount,
-      fromAmount,
-      toAmount,
-      paidAt,
-    } = dto;
+    const { fromAccountId, toAccountId, toUser, fromAmount, toAmount, paidAt } =
+      dto;
 
     const fromAcc = await this.accountRepository.findOne({
-      ownedBy: fromOwner,
+      id: fromAccountId,
       userId: user.id,
-      bank: fromAccount,
-      unit: fromUnit,
     });
 
     const toAcc = await this.accountRepository.findOne({
-      ownedBy: toOwner,
+      id: toAccountId,
       userId: toUser,
-      bank: toAccount,
-      unit: toUnit,
     });
 
     if (!fromAcc || !toAcc) {
@@ -57,38 +48,123 @@ export class ExchangeService {
       throw new UnprocessableEntityException('not enugh money');
     }
 
-    await this.accountRepository.updateOneById(
-      { ballance: fromAcc.ballance - fromAmount },
-      fromAcc.id,
-    );
-    await this.accountRepository.updateOneById(
-      { ballance: toAcc.ballance + toAmount },
-      toAcc.id,
-    );
+    const dbTransaction = await this.seq.transaction();
 
-    const payment = await this.paymentRepository.create({
-      accountId: fromAcc.id,
-      amount: fromAmount,
-      remain: fromAcc.ballance - fromAmount,
-      category: PaymentCategory.EXCHANGE,
-      isMaman: false,
-      isFun: false,
-      paidAt,
-    });
+    try {
+      await this.accountRepository.updateOneById(
+        { ballance: fromAcc.ballance - fromAmount },
+        fromAcc.id,
+        dbTransaction,
+      );
+      await this.accountRepository.updateOneById(
+        { ballance: toAcc.ballance + toAmount },
+        toAcc.id,
+        dbTransaction,
+      );
 
-    const income = await this.incomeRepository.create({
-      accountId: toAcc.id,
-      remain: toAcc.ballance + toAmount,
-      amount: toAmount,
-      category: IncomeCategory.EXCHANGE,
-      paidAt,
-    });
+      const payment = await this.paymentRepository.create(
+        {
+          accountId: fromAcc.id,
+          amount: fromAmount,
+          remain: fromAcc.ballance - fromAmount,
+          category: PaymentCategory.EXCHANGE,
+          isMaman: false,
+          isFun: false,
+          paidAt,
+        },
+        dbTransaction,
+      );
 
-    return this.exchangeRepository.create({
-      paymentId: payment.id,
-      incomeId: income.id,
-      fromAmount,
-      toAmount,
-    });
+      const income = await this.incomeRepository.create(
+        {
+          accountId: toAcc.id,
+          remain: toAcc.ballance + toAmount,
+          amount: toAmount,
+          category: IncomeCategory.EXCHANGE,
+          paidAt,
+        },
+        dbTransaction,
+      );
+
+      const result = await this.exchangeRepository.create(
+        {
+          paymentId: payment.id,
+          incomeId: income.id,
+          fromAmount,
+          toAmount,
+        },
+        dbTransaction,
+      );
+
+      await dbTransaction.commit();
+
+      return result;
+    } catch (err) {
+      await dbTransaction.rollback();
+      throw err;
+    }
+  }
+
+  async deleteExchange(id: number, user: User) {
+    const dbTransaction = await this.seq.transaction();
+
+    try {
+      const exchange = await this.exchangeRepository.findOneOrFail(
+        {
+          where: { id },
+          include: [
+            {
+              model: PaymentModel,
+              as: 'payment',
+              include: [{ model: AccountModel, as: 'account' }],
+            },
+            {
+              model: IncomeModel,
+              as: 'income',
+              include: [{ model: AccountModel, as: 'account' }],
+            },
+          ],
+        },
+        dbTransaction,
+      );
+
+      if (exchange.payment.account.userId !== user.id) {
+        throw new NotFoundException('exchange-not-found');
+      }
+
+      await this.accountRepository.updateOneById(
+        { ballance: exchange.payment.account.ballance + exchange.fromAmount },
+        exchange.payment.account.id,
+        dbTransaction,
+      );
+
+      await this.accountRepository.updateOneById(
+        { ballance: exchange.income.account.ballance - exchange.toAmount },
+        exchange.income.account.id,
+        dbTransaction,
+      );
+
+      const result = await this.exchangeRepository.delete(
+        { where: { id } },
+        dbTransaction,
+      );
+
+      await this.paymentRepository.delete(
+        { where: { id: exchange.paymentId } },
+        dbTransaction,
+      );
+
+      await this.incomeRepository.delete(
+        { where: { id: exchange.incomeId } },
+        dbTransaction,
+      );
+
+      await dbTransaction.commit();
+
+      return result;
+    } catch (err) {
+      await dbTransaction.rollback();
+      throw err;
+    }
   }
 }

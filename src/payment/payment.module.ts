@@ -10,16 +10,18 @@ import { AccountRepository } from 'src/account/entities/repositories/account.rep
 import { AccountDebtRepository } from 'src/account-debt/entities/repositories/account-debt.repository';
 import { UncompletePaymentModel } from 'src/uncomplete-payment/entities/uncomplete-payment.entity';
 import { UncompletePaymentRepository } from 'src/uncomplete-payment/entities/repositories/uncomplete-payment.repository';
-//import { AuthModule } from 'src/auth/auth.module';
+import { BankModel } from 'src/bank/entities/bank.entity';
+import { UnitModel } from 'src/unit/entities/unit.entity';
 
 @Module({
-  //imports: [SequelizeModule.forFeature([PaymentModel]), AuthModule],
   imports: [
     SequelizeModule.forFeature([
       PaymentModel,
       AccountModel,
       AccountDebtModel,
       UncompletePaymentModel,
+      BankModel,
+      UnitModel,
     ]),
   ],
   providers: [

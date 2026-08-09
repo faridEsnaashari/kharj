@@ -1,13 +1,11 @@
 import { z } from 'zod';
-import { Bank } from '../enums/bank.enum';
-import { Unit } from '../enums/unit.enum';
 
 export const createAccountDtoSchema = z
   .object({
     ownedBy: z.number(),
     ballance: z.number(),
-    bank: z.enum(Bank),
-    unit: z.enum(Unit),
+    bankId: z.number(),
+    unitId: z.number(),
     priority: z.number(),
   })
   .required();

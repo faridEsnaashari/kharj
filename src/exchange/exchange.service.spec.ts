@@ -1,0 +1,231 @@
+import {
+  NotFoundException,
+  UnprocessableEntityException,
+} from '@nestjs/common';
+import { ExchangeService } from './exchange.service';
+import { ExchangeRepository } from './entities/repositories/exchange.repository';
+import { PaymentRepository } from 'src/payment/entities/repositories/payment.repository';
+import { IncomeRepository } from 'src/income/entities/repositories/income.repository';
+import { AccountRepository } from 'src/account/entities/repositories/account.repository';
+import {
+  createMockRepository,
+  MockRepository,
+} from 'src/common/test-utils/mock-repository';
+import {
+  createMockSequelize,
+  MockSequelize,
+} from 'src/common/test-utils/mock-sequelize';
+import { User } from 'src/user/entities/user.entity';
+import { CreateExchangeDto } from './dtos/create-exchange.dto';
+import { PaymentCategory } from 'src/payment/enums/payment-category.enum';
+import { IncomeCategory } from 'src/income/enums/income-category.enum';
+import { Sequelize } from 'sequelize-typescript';
+
+describe('ExchangeService', () => {
+  let service: ExchangeService;
+  let exchangeRepository: MockRepository;
+  let paymentRepository: MockRepository;
+  let incomeRepository: MockRepository;
+  let accountRepository: MockRepository;
+  let seq: MockSequelize;
+  const user = { id: 1 } as User;
+
+  const dto: CreateExchangeDto = {
+    fromAccountId: 1,
+    toAccountId: 2,
+    toUser: 2,
+    fromAmount: 100,
+    toAmount: 90,
+    paidAt: '2024-01-01',
+  };
+
+  beforeEach(() => {
+    exchangeRepository = createMockRepository();
+    paymentRepository = createMockRepository();
+    incomeRepository = createMockRepository();
+    accountRepository = createMockRepository();
+    seq = createMockSequelize();
+
+    service = new ExchangeService(
+      exchangeRepository as unknown as ExchangeRepository,
+      paymentRepository as unknown as PaymentRepository,
+      incomeRepository as unknown as IncomeRepository,
+      accountRepository as unknown as AccountRepository,
+      seq as unknown as Sequelize,
+    );
+  });
+
+  it('looks up the destination account by toUser, not the caller', async () => {
+    accountRepository.findOne
+      .mockResolvedValueOnce({ id: 1, ballance: 500 })
+      .mockResolvedValueOnce({ id: 2, ballance: 200 });
+    accountRepository.updateOneById.mockResolvedValue(undefined);
+    paymentRepository.create.mockResolvedValue({ id: 11 });
+    incomeRepository.create.mockResolvedValue({ id: 22 });
+    exchangeRepository.create.mockResolvedValue({ id: 33 });
+
+    await service.createExchange({ ...dto, toUser: 7 }, user);
+
+    expect(accountRepository.findOne).toHaveBeenNthCalledWith(1, {
+      id: dto.fromAccountId,
+      userId: user.id,
+    });
+    expect(accountRepository.findOne).toHaveBeenNthCalledWith(2, {
+      id: dto.toAccountId,
+      userId: 7,
+    });
+  });
+
+  it('throws NotFoundException when either account is missing', async () => {
+    accountRepository.findOne
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: 2, ballance: 500 });
+
+    await expect(service.createExchange(dto, user)).rejects.toThrow(
+      NotFoundException,
+    );
+  });
+
+  it('throws UnprocessableEntityException when the source balance is insufficient', async () => {
+    accountRepository.findOne
+      .mockResolvedValueOnce({ id: 1, ballance: 10 })
+      .mockResolvedValueOnce({ id: 2, ballance: 500 });
+
+    await expect(service.createExchange(dto, user)).rejects.toThrow(
+      UnprocessableEntityException,
+    );
+  });
+
+  it('moves funds between accounts and links payment/income/exchange records', async () => {
+    accountRepository.findOne
+      .mockResolvedValueOnce({ id: 1, ballance: 500 })
+      .mockResolvedValueOnce({ id: 2, ballance: 200 });
+    accountRepository.updateOneById.mockResolvedValue(undefined);
+    paymentRepository.create.mockResolvedValue({ id: 11 });
+    incomeRepository.create.mockResolvedValue({ id: 22 });
+    exchangeRepository.create.mockResolvedValue({ id: 33 });
+
+    await service.createExchange(dto, user);
+
+    const dbTransaction = await seq.transaction();
+
+    expect(accountRepository.updateOneById).toHaveBeenCalledWith(
+      { ballance: 400 },
+      1,
+      dbTransaction,
+    );
+    expect(accountRepository.updateOneById).toHaveBeenCalledWith(
+      { ballance: 290 },
+      2,
+      dbTransaction,
+    );
+    expect(paymentRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        accountId: 1,
+        amount: 100,
+        category: PaymentCategory.EXCHANGE,
+      }),
+      dbTransaction,
+    );
+    expect(incomeRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        accountId: 2,
+        amount: 90,
+        category: IncomeCategory.EXCHANGE,
+      }),
+      dbTransaction,
+    );
+    expect(exchangeRepository.create).toHaveBeenCalledWith(
+      {
+        paymentId: 11,
+        incomeId: 22,
+        fromAmount: 100,
+        toAmount: 90,
+      },
+      dbTransaction,
+    );
+  });
+
+  describe('deleteExchange', () => {
+    function mockExchange(overrides: Record<string, unknown> = {}) {
+      exchangeRepository.findOneOrFail.mockResolvedValue({
+        id: 33,
+        paymentId: 11,
+        incomeId: 22,
+        fromAmount: 100,
+        toAmount: 90,
+        payment: { account: { id: 1, userId: user.id, ballance: 400 } },
+        income: { account: { id: 2, ballance: 290 } },
+        ...overrides,
+      });
+    }
+
+    beforeEach(() => {
+      accountRepository.updateOneById.mockResolvedValue(undefined);
+      exchangeRepository.delete.mockResolvedValue(1);
+      paymentRepository.delete.mockResolvedValue(1);
+      incomeRepository.delete.mockResolvedValue(1);
+    });
+
+    it('reverses the balance moved on both accounts', async () => {
+      mockExchange();
+      const dbTransaction = await seq.transaction();
+
+      await service.deleteExchange(33, user);
+
+      expect(accountRepository.updateOneById).toHaveBeenCalledWith(
+        { ballance: 500 },
+        1,
+        dbTransaction,
+      );
+      expect(accountRepository.updateOneById).toHaveBeenCalledWith(
+        { ballance: 200 },
+        2,
+        dbTransaction,
+      );
+    });
+
+    it('deletes the exchange, payment and income records', async () => {
+      mockExchange();
+      const dbTransaction = await seq.transaction();
+
+      await service.deleteExchange(33, user);
+
+      expect(exchangeRepository.delete).toHaveBeenCalledWith(
+        { where: { id: 33 } },
+        dbTransaction,
+      );
+      expect(paymentRepository.delete).toHaveBeenCalledWith(
+        { where: { id: 11 } },
+        dbTransaction,
+      );
+      expect(incomeRepository.delete).toHaveBeenCalledWith(
+        { where: { id: 22 } },
+        dbTransaction,
+      );
+    });
+
+    it('throws NotFoundException when the caller does not own the source account', async () => {
+      mockExchange({
+        payment: { account: { id: 1, userId: 999, ballance: 400 } },
+      });
+
+      await expect(service.deleteExchange(33, user)).rejects.toThrow(
+        NotFoundException,
+      );
+      expect(accountRepository.updateOneById).not.toHaveBeenCalled();
+    });
+
+    it('rolls back the transaction when the exchange cannot be found', async () => {
+      const dbTransaction = await seq.transaction();
+      exchangeRepository.findOneOrFail.mockRejectedValue(
+        new NotFoundException('not found'),
+      );
+
+      await expect(service.deleteExchange(33, user)).rejects.toThrow(
+        NotFoundException,
+      );
+      expect(dbTransaction.rollback).toHaveBeenCalled();
+    });
+  });
+});

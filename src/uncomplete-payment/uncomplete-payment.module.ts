@@ -6,15 +6,22 @@ import { UncompletePaymentModel } from './entities/uncomplete-payment.entity';
 import { UncompletePaymentService } from './uncomplete-payment.service';
 import { UncompletePaymentRepository } from './entities/repositories/uncomplete-payment.repository';
 import { AccountRepository } from 'src/account/entities/repositories/account.repository';
-//import { AuthModule } from 'src/auth/auth.module';
+import { BankModel } from 'src/bank/entities/bank.entity';
+import { BankRepository } from 'src/bank/entities/repositories/bank.repository';
 
 @Module({
-  //imports: [SequelizeModule.forFeature([UncompletePaymentsModel]), AuthModule],
-  imports: [SequelizeModule.forFeature([UncompletePaymentModel, AccountModel])],
+  imports: [
+    SequelizeModule.forFeature([
+      UncompletePaymentModel,
+      AccountModel,
+      BankModel,
+    ]),
+  ],
   providers: [
     UncompletePaymentService,
     UncompletePaymentRepository,
     AccountRepository,
+    BankRepository,
   ],
   controllers: [UncompletePaymentController],
 })

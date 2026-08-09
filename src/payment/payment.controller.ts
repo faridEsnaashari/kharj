@@ -1,8 +1,11 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
+  Param,
   Post,
+  Put,
   Query,
   Req,
   UseGuards,
@@ -20,13 +23,31 @@ import {
   GetAllPaymentsDto,
   getAllPaymentsDtoSchema,
 } from './dtos/get-all-payment.dto';
+import {
+  UpdatePaymentDto,
+  updatePaymentDtoSchema,
+} from './dtos/update-payment.dto';
 
 @Controller('payment')
+@UseGuards(HasAccessGuard)
 export class PaymentController {
   constructor(private paymentService: PaymentService) {}
 
+  @Get('categories')
+  getPaymentCategories() {
+    return this.paymentService.getPaymentCategories();
+  }
+
+  @Get()
+  @UsePipes(new ZodValidationPipe(getAllPaymentsDtoSchema))
+  async getAllPayments(
+    @Req() req: { user: User },
+    @Query() query: GetAllPaymentsDto,
+  ) {
+    return this.paymentService.getAllPayments(query, req.user);
+  }
+
   @Post()
-  @UseGuards(HasAccessGuard)
   @UsePipes(new ZodValidationPipe(createPaymentDtoSchema))
   async createPayment(
     @Req() req: { user: User },
@@ -35,13 +56,18 @@ export class PaymentController {
     return this.paymentService.createPayment(dto, req.user);
   }
 
-  @Get()
-  @UseGuards(HasAccessGuard)
-  @UsePipes(new ZodValidationPipe(getAllPaymentsDtoSchema))
-  async getAllPayments(
+  @Put(':id')
+  @UsePipes(new ZodValidationPipe(updatePaymentDtoSchema))
+  async updatePayment(
+    @Param('id') id: number,
     @Req() req: { user: User },
-    @Query() query: GetAllPaymentsDto,
+    @Body() dto: UpdatePaymentDto,
   ) {
-    return this.paymentService.getAllPayments(query, req.user);
+    return this.paymentService.updatePayment(id, dto, req.user);
+  }
+
+  @Delete(':id')
+  async deletePayment(@Param('id') id: number, @Req() req: { user: User }) {
+    return this.paymentService.deletePayment(id, req.user);
   }
 }

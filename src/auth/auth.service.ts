@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { UserRepository } from '../user/entities/repositories/user.repository';
 import { createUserToken } from './logics/jwt.logic';
 import { SigninDto } from './dtos/signin.dto';
+import { generateRelatedCode } from 'src/user/logics/relations-logic';
 
 @Injectable()
 export class AuthService {
@@ -12,6 +13,20 @@ export class AuthService {
 
     const user = await this.userRepo.findOneOrFail({
       where: { name: username, password },
+    });
+
+    const token = await createUserToken({ name: user.name, id: user.id });
+
+    return { token };
+  }
+
+  async signup(signinDto: SigninDto): Promise<{ token: string }> {
+    const { username, password } = signinDto;
+
+    const user = await this.userRepo.create({
+      name: username,
+      password,
+      related_code: `${generateRelatedCode()}`,
     });
 
     const token = await createUserToken({ name: user.name, id: user.id });

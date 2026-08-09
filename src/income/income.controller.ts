@@ -1,9 +1,12 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Post,
+  Put,
+  Query,
   Req,
   UseGuards,
   UsePipes,
@@ -16,10 +19,33 @@ import {
   CreateIncomeDto,
   createIncomeDtoSchema,
 } from './dtos/create-income.dto';
+import {
+  UpdateIncomeDto,
+  updateIncomeDtoSchema,
+} from './dtos/update-income.dto';
+import {
+  GetAllIncomeDto,
+  getAllIncomeDtoSchema,
+} from './dtos/get-all-income.dto';
 
 @Controller('income')
+@UseGuards(HasAccessGuard)
 export class IncomeController {
   constructor(private incomeService: IncomeService) {}
+
+  @Get('categories')
+  getIncomeCategories() {
+    return this.incomeService.getIncomeCategories();
+  }
+
+  @Get()
+  @UsePipes(new ZodValidationPipe(getAllIncomeDtoSchema))
+  async getAllIncomes(
+    @Req() req: { user: User },
+    @Query() query: GetAllIncomeDto,
+  ) {
+    return this.incomeService.getAllIncomes(query, req.user);
+  }
 
   @Get(':id')
   async findOneIncome(@Param('id') id: number) {
@@ -28,8 +54,22 @@ export class IncomeController {
 
   @Post()
   @UsePipes(new ZodValidationPipe(createIncomeDtoSchema))
-  @UseGuards(HasAccessGuard)
   async createIncome(@Req() req: { user: User }, @Body() dto: CreateIncomeDto) {
     return this.incomeService.createIncome(dto, req.user);
+  }
+
+  @Put(':id')
+  @UsePipes(new ZodValidationPipe(updateIncomeDtoSchema))
+  async updateIncome(
+    @Param('id') id: number,
+    @Req() req: { user: User },
+    @Body() dto: UpdateIncomeDto,
+  ) {
+    return this.incomeService.updateIncome(id, dto, req.user);
+  }
+
+  @Delete(':id')
+  async deleteIncome(@Param('id') id: number, @Req() req: { user: User }) {
+    return this.incomeService.deleteIncome(id, req.user);
   }
 }

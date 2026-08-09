@@ -1,12 +1,25 @@
 import { Module } from '@nestjs/common';
 import { SequelizeModule } from '@nestjs/sequelize';
-import { databaseConfig } from './sequelize-cli.config';
 import { appConfigs } from 'src/app.configs';
+import { DatabaseConnectionLogger } from './database-connection.logger';
+import { databaseConfig } from './database.config';
 
 @Module({
   imports: [
     SequelizeModule.forRoot({
       dialect: 'mysql',
+      logging:
+        appConfigs.nodeEnv === 'develop'
+          ? databaseConfig.development.logging
+          : databaseConfig.production.logging,
+      timezone:
+        appConfigs.nodeEnv === 'develop'
+          ? databaseConfig.development.timezone
+          : databaseConfig.production.timezone,
+      dialectOptions:
+        appConfigs.nodeEnv === 'develop'
+          ? databaseConfig.development.dialectOptions
+          : databaseConfig.production.dialectOptions,
       host:
         appConfigs.nodeEnv === 'develop'
           ? databaseConfig.development.host
@@ -33,6 +46,7 @@ import { appConfigs } from 'src/app.configs';
       synchronize: true,
     }),
   ],
+  providers: [DatabaseConnectionLogger],
   exports: [SequelizeModule],
 })
 export class DatabaseModule {}

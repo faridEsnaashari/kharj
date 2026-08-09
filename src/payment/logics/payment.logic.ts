@@ -59,3 +59,21 @@ export function sortAccounts(
 export function getPrice(price: number): number {
   return Math.floor(price / 10000);
 }
+
+export function restoreBalance(
+  currentBalance: number,
+  paidAmount: number,
+): number {
+  return currentBalance + paidAmount;
+}
+
+export function deductBalance(
+  restoredBalance: number,
+  newAmount: number,
+): number {
+  return restoredBalance - newAmount;
+}
+
+export function hasSufficientBalance(balance: number, amount: number): boolean {
+  return balance >= amount;
+}

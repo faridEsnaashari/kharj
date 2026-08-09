@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { ForbiddenException, Injectable } from '@nestjs/common';
 import { UserRepository } from './entities/repositories/user.repository';
 import { User, UserModel } from './entities/user.entity';
 import { UserRelationRepository } from './entities/repositories/user-relation.repository';
@@ -32,5 +32,25 @@ export class UserService {
     );
 
     return [user, ...relatedUsers];
+  }
+
+  async resolveTargetUserId(
+    requestedUserId: number | undefined,
+    user: User,
+  ): Promise<number> {
+    if (!requestedUserId || requestedUserId === user.id) {
+      return user.id;
+    }
+
+    const relation = await this.userRelationRepository.findOne({
+      userId: user.id,
+      relatedTo: requestedUserId,
+    });
+
+    if (!relation) {
+      throw new ForbiddenException('user-not-related');
+    }
+
+    return requestedUserId;
   }
 }

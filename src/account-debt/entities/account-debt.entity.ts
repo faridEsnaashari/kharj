@@ -77,9 +77,9 @@ export class AccountDebtModel
   @BelongsTo(() => PaymentModel, { as: 'payment', foreignKey: 'payment_id' })
   payment!: Payment;
 
-  @BelongsTo(() => UserModel, { as: 'fromUser', foreignKey: 'from_user' })
+  @BelongsTo(() => UserModel, { as: 'fromUser', foreignKey: 'from_user_id' })
   fromUser!: User;
 
-  @BelongsTo(() => UserModel, { as: 'toUser', foreignKey: 'to_user' })
+  @BelongsTo(() => UserModel, { as: 'toUser', foreignKey: 'to_user_id' })
   toUser!: User;
 }

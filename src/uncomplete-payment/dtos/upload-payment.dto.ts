@@ -1,8 +1,7 @@
 import { z } from 'zod';
-import { Bank } from 'src/account/enums/bank.enum';
 
 export const uploadPaymentDtoSchema = z.object({
-  bank: z.enum(Bank),
+  bankId: z.number(),
   uploadedFile: z.string(),
 });
 

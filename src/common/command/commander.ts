@@ -1,3 +1,6 @@
+import { config } from 'dotenv';
+config();
+
 import { NestFactory } from '@nestjs/core';
 import yargs from 'yargs';
 import glob from 'fast-glob';

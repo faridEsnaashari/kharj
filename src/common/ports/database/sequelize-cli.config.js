@@ -8,6 +8,11 @@ module.exports = {
     password: process.env.STAGE_MYSQL_PASSWORD || 'pass',
     database: process.env.STAGE_MYSQL_DATABASE || 'test',
     dialect: 'mysql',
+    timezone: process.env.DB_TIMEZONE || '+03:30',
+    dialectOptions: {
+      typeCast: process.env.DB_TYPE_CAST !== 'false',
+      dateStrings: process.env.DB_DATE_STRINGS !== 'false',
+    },
   },
   test: {
     host: process.env.MYSQL_HOST || 'localhost',
@@ -16,6 +21,11 @@ module.exports = {
     password: process.env.MYSQL_PASSWORD || 'pass',
     database: process.env.MYSQL_DATABASE || 'test',
     dialect: 'mysql',
+    timezone: process.env.DB_TIMEZONE || '+03:30',
+    dialectOptions: {
+      typeCast: process.env.DB_TYPE_CAST !== 'false',
+      dateStrings: process.env.DB_DATE_STRINGS !== 'false',
+    },
   },
   production: {
     host: process.env.MYSQL_HOST || 'localhost',
@@ -24,5 +34,10 @@ module.exports = {
     password: process.env.MYSQL_PASSWORD || 'pass',
     database: process.env.MYSQL_DATABASE || 'test',
     dialect: 'mysql',
+    timezone: process.env.DB_TIMEZONE || '+03:30',
+    dialectOptions: {
+      typeCast: process.env.DB_TYPE_CAST !== 'false',
+      dateStrings: process.env.DB_DATE_STRINGS !== 'false',
+    },
   },
 };
