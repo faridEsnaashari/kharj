@@ -22,6 +22,7 @@ import { DebtModule } from './debt/debt.module';
   imports: [
     ServeStaticModule.forRoot({
       rootPath: join(__dirname, '..', 'public'),
+      serveRoot: '/front',
     }),
     DatabaseModule,
     PinoModule,

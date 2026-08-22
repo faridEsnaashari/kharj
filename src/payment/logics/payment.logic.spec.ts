@@ -22,9 +22,9 @@ function buildAccount(overrides: Partial<Account>): Account {
 }
 
 describe('getPrice', () => {
-  it('divides by 10000 and floors the result', () => {
-    expect(getPrice(150000)).toBe(15);
-    expect(getPrice(154999)).toBe(15);
+  it('floors the price without scaling it', () => {
+    expect(getPrice(150000)).toBe(150000);
+    expect(getPrice(154999.9)).toBe(154999);
     expect(getPrice(0)).toBe(0);
   });
 });

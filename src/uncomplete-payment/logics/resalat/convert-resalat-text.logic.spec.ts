@@ -17,7 +17,7 @@ describe('convertResalatText', () => {
 
     expect(result.type).toBe(UncompletePaymentType.PAYMENT);
     expect(result.source).toBe(UncompletePaymentSource.SMS);
-    expect(result.amount).toBe(15);
+    expect(result.amount).toBe(150000);
     expect(result.remain).toBe(1000000);
     expect(result.paidAt).toBe(
       date(`${year}-25-10 14:30:00`, { jalali: true }).format(
@@ -37,7 +37,7 @@ describe('convertResalatText', () => {
     const result = convertResalatText(text);
 
     expect(result.type).toBe(UncompletePaymentType.INCOME);
-    expect(result.amount).toBe(22);
+    expect(result.amount).toBe(220000);
     expect(result.remain).toBe(500000);
   });
 });

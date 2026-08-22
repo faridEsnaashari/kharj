@@ -38,12 +38,12 @@ describe('convertResalatXlsx', () => {
 
     expect(result[0].type).toBe(UncompletePaymentType.PAYMENT);
     expect(result[0].source).toBe(UncompletePaymentSource.CARD);
-    expect(result[0].amount).toBe(15);
-    expect(result[0].remain).toBe(85);
+    expect(result[0].amount).toBe(150000);
+    expect(result[0].remain).toBe(850000);
 
     expect(result[1].type).toBe(UncompletePaymentType.INCOME);
     expect(result[1].source).toBe(UncompletePaymentSource.ONLINE);
-    expect(result[1].amount).toBe(22);
+    expect(result[1].amount).toBe(220000);
 
     expect(result[2].source).toBe(UncompletePaymentSource.UNKNOWN);
 
