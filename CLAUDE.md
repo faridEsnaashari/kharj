@@ -784,6 +784,14 @@ two-function shape, no more and no less:
   block the others from still running. Internally each factory closures a single `created` array
   that `after()`'s cleanup list is built from — don't keep a separate `results` array alongside
   `created` purely to mirror it; that was tried and reverted as pointless duplication.
+- **`created.push(...)` always happens before that same call's `expect()` assertions, never
+  after.** Every `test()` in every logic file follows this order: make the request, push the
+  result into `created`, *then* assert on it. If the push came after the assertions and one of
+  them threw (a real assertion failure, not just a bug in the test), the just-created row would
+  never make it into `created` — `after()`'s cleanup would have no idea it existed, and it would
+  leak into STAGE permanently instead of being deleted. Pushing first means a resource is tracked
+  for cleanup the moment it's confirmed created, regardless of whether anything checked against it
+  afterward turns out to be wrong.
 - **Every `createTestX(makeReq)` instance is created fresh per test and `test()` is called at
   most once on it.** A spec with several `it()` blocks (see `payment.e2e-spec.ts` below)
   instantiates `accountTest`/`incomeTest`/etc. in `beforeEach`, not `beforeAll` — so each test gets
