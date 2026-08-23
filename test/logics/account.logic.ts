@@ -73,6 +73,8 @@ export function createTestAccount(makeReq: ReturnType<typeof makeAppReq>) {
           },
         });
 
+        created.push(account);
+
         expect(account.success).toBeTruthy();
         expect(account.data).toMatchObject({
           ballance: accountInput.ballance,
@@ -96,8 +98,6 @@ export function createTestAccount(makeReq: ReturnType<typeof makeAppReq>) {
         });
 
         expect(existAccount.success).toBeFalsy();
-
-        created.push(account);
       }
 
       return created;

@@ -30,10 +30,10 @@ export function createTestUncompletePayment(
         body: { bankId, text },
       });
 
+      created.push(pending.data);
+
       expect(pending.success).toBeTruthy();
       expect(pending.data).toMatchObject(expected);
-
-      created.push(pending.data);
 
       return pending.data;
     },

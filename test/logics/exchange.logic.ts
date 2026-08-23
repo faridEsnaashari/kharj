@@ -49,13 +49,13 @@ export function createTestExchange(makeReq: ReturnType<typeof makeAppReq>) {
         body: exchange,
       });
 
+      created.push(result.data);
+
       expect(result.success).toBeTruthy();
       expect(result.data).toMatchObject({
         fromAmount: exchange.fromAmount,
         toAmount: exchange.toAmount,
       });
-
-      created.push(result.data);
 
       const afterFrom = await makeReq<Account>({
         method: 'get',

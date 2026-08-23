@@ -45,8 +45,9 @@ export function createTestPayment(makeReq: ReturnType<typeof makeAppReq>) {
         body: payment,
       });
 
-      expect(payments.success).toBeTruthy();
       created.push(...payments.data);
+
+      expect(payments.success).toBeTruthy();
 
       const debitedPayment = payments.data.find(
         (p) => p.accountId === debitedAccount.id,
