@@ -48,6 +48,8 @@ export function createTestIncome(makeReq: ReturnType<typeof makeAppReq>) {
           },
         });
 
+        created.push(income);
+
         expect(income.success).toBeTruthy();
         expect({
           ...income.data,
@@ -61,8 +63,6 @@ export function createTestIncome(makeReq: ReturnType<typeof makeAppReq>) {
           paidAt: incomeInput.paidAt,
           accountId,
         });
-
-        created.push(income);
 
         const expectedBalance =
           runningBalance.get(accountId)! + incomeInput.amount;

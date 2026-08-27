@@ -94,7 +94,7 @@ describe('Create Uncomplete Payments', () => {
       bankId: ownerAccount.data.bankId,
       text: RESALAT_SMS_TEXT,
       expected: {
-        amount: 150,
+        amount: 1500000,
         remain: 800000,
         type: UncompletePaymentType.PAYMENT,
       },

@@ -262,6 +262,8 @@ src/
 │   ├── uncomplete-payment.module.ts
 │   ├── dtos/
 │   ├── enums/
+│   ├── commands/
+│   │   └── fill-type.command.ts          cmd `fill-type`
 │   └── logics/
 │       ├── resalat/
 │       │   ├── convert-resalat-text.logic.ts
@@ -289,7 +291,15 @@ src/
     │   └── project-structure/
     │       └── create.command.ts        cmd `create-new-module`
     ├── commands/
-    │   └── correct-timestamps.command.ts  cmd `correct-timestamps`
+    │   ├── correct-timestamps.command.ts  cmd `correct-timestamps`
+    │   └── fill-amount-scale.command.ts   cmd `fill-amount-scale` — one-time backfill,
+    │                                      repository-driven (no raw SQL), multiplying every
+    │                                      stored amount belonging to a Rial-unit account
+    │                                      (payments, incomes, account balances, account debts,
+    │                                      exchanges, uncomplete payments) by 10000 — accounts in
+    │                                      any other unit are left untouched (see
+    │                                      UncompletePayments below); never run by Claude,
+    │                                      user-run only
     ├── filters/
     │   └── http-exceptions.filter.ts
     ├── gaurds/
@@ -521,11 +531,49 @@ xlsx upload is two calls: `POST /file/upload/bank-payment` (multipart, field nam
 
 `GET /uncomplete-payments` includes each row's `account` (with nested `bank`/`unit`/`owner`) — `bank`/`unit` are needed for `PAYMENT`-type rows, since converting one calls `POST /payment` which wants `bankId`/`unitId`/`ownerId`, not `accountId`; `INCOME`-type rows already carry `accountId` directly and don't strictly need them, but they're included for both so the frontend can render "which account" uniformly. `owner` (just `id`/`name`) is included so the frontend can show whose account a pending row belongs to. Converting a pending row into a real transaction isn't a dedicated endpoint — the frontend just calls the ordinary `POST /payment` or `POST /income` (chosen by the row's `type`) with `uncompletePaymentId` set to the row's id; `GET /uncomplete-payments`' own query already excludes any row with a linked `payment`/`income` (`$payment.uncomplete_payment_id$ IS NULL AND $income.uncomplete_payment_id$ IS NULL`), so a converted row simply stops appearing — no separate "mark resolved" step.
 
+**Amount scaling (historical) — `getPrice`, `src/payment/logics/payment.logic.ts`.** The app used
+to trim Rial amounts for readability at storage time: every Rial amount anywhere (typed by hand
+into the Payment/Income/Exchange/Account forms, not just bank-imported ones) was stored ÷10000 of
+its real value, and `getPrice` was the parsing-time piece of that convention for bank imports —
+every uncomplete-payment converter ran its parsed `amount` (and, for the xlsx converters only,
+`remain`) through it. This only ever applied to Rial — an account tracked in any other unit (USD,
+Gold, a user-defined unit, ...) was always stored at full precision, never divided. The old
+approach also violated the Shared Conventions rule that "amounts in the DB are stored as raw
+numbers" and was internally inconsistent besides: the xlsx converters divided both `amount` and
+`remain`, but the SMS/text converters (RESALAT/PASARGAD/MELY text) only ever divided `amount` —
+`remain` there was already stored raw, straight from the SMS's `مانده:`/`BALANCE:` line (banks
+don't send trimmed balances). `getPrice` now just floors its input with no scaling, so every
+converter stores the true raw value regardless of unit. The frontend's shared `Amount` component
+(`shared/components/Amount.jsx`) is the new, single place that trims for readability — see its
+Rules entry below for the unit-conditional ÷10000 it now applies.
+
+The one-time `fill-amount-scale` command (`src/common/commands/fill-amount-scale.command.ts`, see
+Project Layout above) backfills every table that held a Rial amount under the old trimmed
+convention: `payments` (`amount`, `remain`), `incomes` (`amount`, `remain`), `accounts`
+(`ballance`), `account_debts` (`amount`), `exchanges` (`fromAmount`, `toAmount`), and
+`uncomplete_payments` (`amount` unconditionally, `remain` only where `source != 'SMS'` —
+SMS-sourced `remain` was never divided, so multiplying it too would double-corrupt already-correct
+data). Crucially, this backfill is scoped to Rial: it first resolves every Rial `Unit` row
+(`symbol === 'RIAL'`, both the general seeded one and any user-defined unit that happens to share
+that symbol) via `UnitRepository`, then every `Account` whose `unitId` is one of those, and only
+multiplies rows that trace back to one of those Rial accounts — a row belonging to a USD/Gold/other
+account is left untouched. Both `Payment`/`Income` (via their own `accountId`) and `AccountDebt`
+(via `payment.accountId`, resolved through a `paymentId → accountId` map built from all payments)
+are checked this way; `Exchange` is checked on *each side independently* (`fromAmount` against the
+source payment's account, `toAmount` against the destination income's account), since a single
+exchange can legitimately move money between two different units' books, and only the Rial side
+(if any) should be multiplied. It's built entirely on repository methods (`findAll` +
+`updateOneById` per row via each module's real `XRepository`, e.g. `PaymentRepository`,
+`AccountRepository`, `UnitRepository`) rather than a raw `sequelize.query` — unlike
+`correct-timestamps.command.ts`'s raw-SQL pattern, this one goes through the same repository layer
+every service uses, at the cost of one `UPDATE` per row instead of one `UPDATE` per table
+(acceptable for a one-off maintenance command, not a hot path).
+
 - **RESALAT** text: 4-line SMS (`account\namount±\nMM/DD_HH:mm\nمانده: remain`), Jalali month/day assumed current Jalali year.
   xlsx: positional `__EMPTY_N` columns (Excel export has no header names), sign of `__EMPTY_8` distinguishes payment/income.
 - **PASARGAD** text: identical 4-line SMS shape to Resalat, reuses the same parsing logic.
   xlsx: Wepod "account bill" export (see `tmp/pasargad/get-account-bill.ts`) with named JSON columns — `issuanceDate` (ISO, UTC-offset — converted to `Asia/Tehran` before formatting), `amount`, `debtor` (`true` = income / balance increase, `false` = payment / outflow), `afterTxAmount` (→ `remain`), `description` (source CARD/ONLINE guessed via keyword match, else UNKNOWN).
-- **MELY** xlsx: "account turnover" export, positional `__EMPTY_N` columns like Resalat but with 3 metadata rows + a Persian header row first — transaction rows are recognised by a numeric `__EMPTY` (row index). Jalali `تاریخ`+`زمان` → `paidAt`; `نوع` (`برداشت`/`واریز`) picks payment/income; comma-separated rial strings `مبلغ`/`مانده` → `amount`/`remain` via `getPrice`; source keywords matched after normalising Arabic `ي`/`ك` to Persian `ی`/`ک`.
+- **MELY** xlsx: "account turnover" export, positional `__EMPTY_N` columns like Resalat but with 3 metadata rows + a Persian header row first — transaction rows are recognised by a numeric `__EMPTY` (row index). Jalali `تاریخ`+`زمان` → `paidAt`; `نوع` (`برداشت`/`واریز`) picks payment/income; comma-separated rial strings `مبلغ`/`مانده` → `amount`/`remain` (floored via `getPrice`, see above); source keywords matched after normalising Arabic `ي`/`ك` to Persian `ی`/`ک`.
 
 #### Recent Activity (Transactions)
 
@@ -736,6 +784,14 @@ two-function shape, no more and no less:
   block the others from still running. Internally each factory closures a single `created` array
   that `after()`'s cleanup list is built from — don't keep a separate `results` array alongside
   `created` purely to mirror it; that was tried and reverted as pointless duplication.
+- **`created.push(...)` always happens before that same call's `expect()` assertions, never
+  after.** Every `test()` in every logic file follows this order: make the request, push the
+  result into `created`, *then* assert on it. If the push came after the assertions and one of
+  them threw (a real assertion failure, not just a bug in the test), the just-created row would
+  never make it into `created` — `after()`'s cleanup would have no idea it existed, and it would
+  leak into STAGE permanently instead of being deleted. Pushing first means a resource is tracked
+  for cleanup the moment it's confirmed created, regardless of whether anything checked against it
+  afterward turns out to be wrong.
 - **Every `createTestX(makeReq)` instance is created fresh per test and `test()` is called at
   most once on it.** A spec with several `it()` blocks (see `payment.e2e-spec.ts` below)
   instantiates `accountTest`/`incomeTest`/etc. in `beforeEach`, not `beforeAll` — so each test gets
@@ -941,7 +997,7 @@ against `process.argv[2]`, then calls `runner` with a real
 every provider (repositories, services) the same way a controller would, just without
 HTTP. `flags` (optional, `Record<string, yargs.Options>`) are exposed as extra CLI args
 via yargs. Existing commands: `create-new-module`, `correct-timestamps`,
-`fill-payment-paid-at`, `fill-income-paid-at`, `fill-type`.
+`fill-payment-paid-at`, `fill-income-paid-at`, `fill-type`, `fill-amount-scale`.
 
 `commander.ts` loads `.env` itself via `dotenv`'s `config()` — added as the very first
 lines of the file, before any other import — because unlike the real app
@@ -970,6 +1026,35 @@ the contrast with its automatic `prepare` script):
   database, see E2E tests above) both pass — expect pushes to take noticeably longer
   than a commit, and to fail outright if `STAGE_MYSQL_*`/`E2E_TEST_USER_*` aren't set up
   in the local `.env`.
+
+### Static Frontend Serving
+
+In production the backend serves the frontend's built assets itself — there is no
+separate frontend server/process. `src/app.module.ts` wires this up via
+`ServeStaticModule.forRoot({ rootPath: join(__dirname, '..', 'public'), serveRoot:
+'/front' })`: `rootPath` is `dist/public` (relative to the compiled `dist/src`
+output), and `serveRoot: '/front'` scopes **both** static asset serving and the SPA
+catch-all fallback under `/front` — deliberately, so the frontend's routes
+(`/front/payment`, `/front/exchange`, etc.) can never collide with a real backend API
+route living at the origin root (`/payment`, `/exchange`, ...). Without `serveRoot`,
+`@nestjs/serve-static`'s default catch-all (`app.get('*', ...)`) would intercept
+*any* unmatched path at the root, including a mistyped or future API route, and
+silently return the SPA's `index.html` instead of a real 404 — `serveRoot` narrows
+that catch-all to `/front/*` only.
+
+The frontend build must land at `dist/public/index.html` directly (not nested one
+level deeper) for this to work — the deploy script (`tmp/script.sh`, gitignored,
+local-only) does `mv -v ../kharjf/kharj/dist ./dist/public`, which works because
+`./dist/public` doesn't already exist at that point in the script (`mv` renames
+rather than moving-into). An earlier version of the script `mkdir`'d `./dist/public/
+front` before the `mv`, which made `mv` nest the frontend build one level too deep
+(`dist/public/front/dist/index.html`) — that broke both the SPA catch-all (which
+always looks for `index.html` at exactly `rootPath`, not a subfolder) and made the
+app's own client-side router redirect to the bare domain root on first navigation,
+since neither the server nor the router agreed on the `/front` prefix at the time.
+
+The frontend side of this is `src/App.jsx`'s `<BrowserRouter basename={...}>` — see
+"Routing & Navigation" in the Frontend section below.
 
 ### Running the Backend
 
@@ -1042,9 +1127,19 @@ established structure over retrofitting what is already there.
 
 Auth screens (`Signin`/`Signup`) are **not** routed — `App.jsx` still gates
 them with the original `AUTH_STATES` `useState` machine, unchanged. Once
-`AUTH_STATES.AUTHENTICATED`, `App.jsx` mounts a `<BrowserRouter>` wrapping a
-small local `AuthenticatedShell` (defined inline in `App.jsx`, not its own
+`AUTH_STATES.AUTHENTICATED`, `App.jsx` mounts a `<BrowserRouter basename={ROUTER_BASENAME}>`
+wrapping a small local `AuthenticatedShell` (defined inline in `App.jsx`, not its own
 file) that renders:
+
+`ROUTER_BASENAME` is `import.meta.env.PROD ? '/front' : '/'` — in a production build
+the backend serves this app under `/front` (see the backend's "Static Frontend
+Serving" section), so the router needs to know to strip/prepend that prefix itself;
+in dev (`npm run dev`, `import.meta.env.PROD` is `false`) the Vite dev server still
+serves the app at the plain root, so the basename stays `/` there. Every `<Route
+path="...">`, `<NavLink to="...">` (`BottomNav`), and `<Navigate to="...">` below is
+written relative to this basename, not hardcoded with `/front` anywhere — that's the
+point of using React Router's `basename` prop instead of prefixing every path string
+by hand.
 
 - the temporary logout bar (unchanged, still a stand-in for the real
   header/profile screen),
@@ -1555,10 +1650,13 @@ src/
     │                                   usePaginatedList.js's `loadMore`/`hasMore`/`loadingMore`
     ├── lib/
     │   ├── date.js                 dayjs + Jalali helpers
-    │   └── categories.js           categoriesToOptions(categories) — converts the
-    │                               `{ camelKey: { key, value } }` shape the payment/income
-    │                               categories API returns into the `{ value, label }[]` shape
-    │                               `Select` expects
+    │   ├── categories.js           categoriesToOptions(categories) — converts the
+    │   │                           `{ camelKey: { key, value } }` shape the payment/income
+    │   │                           categories API returns into the `{ value, label }[]` shape
+    │   │                           `Select` expects
+    │   └── currency.js             isRialUnit, toDisplayAmount, getAmountHint — the ÷10000
+    │                               Rial-only display trim, re-exported through
+    │                               shared/components (see Amount's Rules entry above)
     ├── styles/
     │   ├── tokens.css              design tokens — the single source of truth
     │   └── components.css          all component styles
@@ -1727,7 +1825,18 @@ from App.jsx — the "Create One Instead" / "Log In Instead" buttons.
 
 ### API Config (`../kharjf/kharj/src/features/auth/api/api.config.js`)
 
-- Base URL: `VITE_API_URL` env var (default `http://localhost:3000`)
+- Base URL: `VITE_API_URL` env var if set, otherwise `window.location.origin` — the
+  backend serves the built frontend itself in production, under a `/front` prefix
+  (`ServeStaticModule.forRoot({ rootPath: join(__dirname, '..', 'public'), serveRoot:
+  '/front' })` in `src/app.module.ts` — see "Static Frontend Serving" above),
+  same origin/port as the API either way. `window.location.origin` never includes a
+  path, so this is unaffected by the `/front` prefix — a production build needs no
+  `VITE_API_URL` baked in at all, it just calls whatever origin it's actually being
+  served from, and API routes themselves stay unprefixed at the origin root (only the
+  static frontend build is scoped under `/front`). `VITE_API_URL` stays as the explicit
+  override for local dev, where the Vite dev server and the backend run on different
+  ports (see the `APP_PORT=4006 ... VITE_API_URL=http://localhost:4006` pattern in
+  Working Rules above).
 - Request interceptor: attaches `Authorization: Bearer <token>` from localStorage
 - Response interceptor: on 401 → clears token → redirects to signin
 
@@ -1810,6 +1919,23 @@ Internal conventions (hold these when adding components):
 5. **Money direction is meaning.** `Amount` renders green/inbound-arrow for positive
    and red/outbound-arrow for negative. Keep the arrow — colour alone fails for
    colour-blind users. Pass `tone="neutral"` for a balance, which has no direction.
+   `Amount` also takes an optional `unit` prop (the transaction/account's `Unit` object, i.e.
+   whatever has a `.symbol`) and divides `value` by `10000` before formatting **only when
+   `unit.symbol === 'RIAL'`** (`shared/lib/currency.js`'s `toDisplayAmount`/`isRialUnit`) —
+   display-only trimming for readability; the raw, untrimmed value is always what's stored and
+   sent to the API (see the backend's UncompletePayments section for why this lives here now
+   instead of in backend parsing, and why it's Rial-only — other units were never trimmed to
+   begin with). Omitting `unit` (or passing a non-Rial one) shows the value as-is, unscaled —
+   this is deliberate: `Debts.jsx`'s two totals cards sum `amount` across potentially mixed
+   units (see `buildDebtSummary` on the backend), so there's no single unit to divide by, and
+   guessing wrong would misrepresent a non-Rial total; every other call site does have a real
+   unit available and passes it. Never apply this trimming again at a call site — every amount
+   in the app renders through `Amount`, so doing it twice would silently show a number 10000x
+   too small. The same `shared/lib/currency.js` also exports `getAmountHint(rawValue, unit)`,
+   used as the `hint` prop (already supported by `Field`/`Input`, see rule 6) on the raw amount
+   `Input` in `PaymentForm`/`IncomeForm`/`ExchangeForm` — it live-previews what the typed Rial
+   value becomes after the same ÷10000 trim (e.g. typing `1500000` shows a `≈ 150` hint), and
+   returns `null` (no hint rendered) for a non-Rial unit or an empty/invalid input.
 6. **Inputs compose `Field`**, which owns the label, the error message, and the
    `aria-describedby`/`aria-invalid` wiring. A new input type must use it too.
 7. **Badge vs Chip:** if it responds to a click it's a `Chip`; if it's just status
@@ -1905,7 +2031,10 @@ VITE_API_URL=http://localhost:3000
 
 ## Shared Conventions
 
-- Amounts in the DB are stored as raw numbers (no currency formatting)
+- Amounts in the DB are stored as raw numbers (no currency formatting), and are transmitted
+  raw over the API too — the only place amounts are ever scaled for readability is the
+  frontend's shared `Amount` component (÷10000, display-only, Rial-unit only — see its Rules
+  entry above)
 - Dates are stored as `YYYY-MM-DD HH:mm:ss` strings
 - Persian (Jalali) calendar input is supported via the date tool
 - `ballance` (note the spelling) is the field name used throughout — do not correct it

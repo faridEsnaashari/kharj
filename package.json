@@ -1,12 +1,13 @@
 {
-  "name": "university-interview",
+  "name": "kharj",
   "version": "0.0.1",
   "description": "",
   "author": "",
   "private": true,
   "license": "UNLICENSED",
   "scripts": {
-    "commander": "npx ts-node -r tsconfig-paths/register src/common/command/commander.ts",
+    "commander": "NODE_ENV=production npx ts-node -r tsconfig-paths/register src/common/command/commander.ts",
+    "commander-dev": "NODE_ENV=develop npx ts-node -r tsconfig-paths/register src/common/command/commander.ts",
     "build": "nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "NODE_ENV=develop nest start",

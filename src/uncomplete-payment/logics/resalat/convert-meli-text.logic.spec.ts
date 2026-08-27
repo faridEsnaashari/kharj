@@ -15,7 +15,7 @@ describe('convertMeliText', () => {
     const result = convertMeliText(text);
 
     expect(result.type).toBe(UncompletePaymentType.PAYMENT);
-    expect(result.amount).toBe(15);
+    expect(result.amount).toBe(150000);
     expect(result.remain).toBe(1000000);
   });
 
@@ -30,6 +30,6 @@ describe('convertMeliText', () => {
     const result = convertMeliText(text);
 
     expect(result.type).toBe(UncompletePaymentType.INCOME);
-    expect(result.amount).toBe(22);
+    expect(result.amount).toBe(220000);
   });
 });
