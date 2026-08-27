@@ -291,15 +291,21 @@ src/
     │   └── project-structure/
     │       └── create.command.ts        cmd `create-new-module`
     ├── commands/
-    │   ├── correct-timestamps.command.ts  cmd `correct-timestamps`
-    │   └── fill-amount-scale.command.ts   cmd `fill-amount-scale` — one-time backfill,
-    │                                      repository-driven (no raw SQL), multiplying every
-    │                                      stored amount belonging to a Rial-unit account
-    │                                      (payments, incomes, account balances, account debts,
-    │                                      exchanges, uncomplete payments) by 10000 — accounts in
-    │                                      any other unit are left untouched (see
-    │                                      UncompletePayments below); never run by Claude,
-    │                                      user-run only
+    │   ├── correct-timestamps.command.ts       cmd `correct-timestamps`
+    │   ├── fill-amount-scale.command.ts        cmd `fill-amount-scale` — one-time backfill,
+    │   │                                       repository-driven (no raw SQL), multiplying
+    │   │                                       every stored amount belonging to a Rial-unit
+    │   │                                       account (payments, incomes, account balances,
+    │   │                                       account debts, exchanges, uncomplete payments)
+    │   │                                       by 10000 — accounts in any other unit are left
+    │   │                                       untouched (see UncompletePayments below); never
+    │   │                                       run by Claude, user-run only
+    │   └── fill-amount-scale-hami.command.ts   cmd `fill-amount-scale-hami` — identical logic
+    │                                           to `fill-amount-scale.command.ts` but scoped to
+    │                                           the `HAMI` unit symbol instead of `RIAL`; a
+    │                                           deliberate copy rather than a shared/parameterized
+    │                                           helper — see UncompletePayments below for why;
+    │                                           never run by Claude, user-run only
     ├── filters/
     │   └── http-exceptions.filter.ts
     ├── gaurds/
@@ -568,6 +574,19 @@ exchange can legitimately move money between two different units' books, and onl
 `correct-timestamps.command.ts`'s raw-SQL pattern, this one goes through the same repository layer
 every service uses, at the cost of one `UPDATE` per row instead of one `UPDATE` per table
 (acceptable for a one-off maintenance command, not a hot path).
+
+`fill-amount-scale-hami.command.ts` is the same fix applied to a second unit —
+`HAMI`, a user-defined unit hit by the same historical trimming convention. It is a **deliberate
+line-for-line copy** of `fill-amount-scale.command.ts` with `RIAL_UNIT_SYMBOL`/`rialUnitIds`/
+`rialAccountIds` renamed to their `HAMI` equivalents, not a shared/parameterized helper the two
+call into — given this command mutates real financial data and a prior version of
+`fill-amount-scale.command.ts` was already run prematurely once (see the git history around the
+"revert" SQL scripts given to the user directly, never committed here), a second command sharing
+implementation with the first means a bug fixed in one is automatically fixed in the other, but
+also means a *bug introduced* in one automatically reaches the other — the duplication trades a
+small amount of drift risk for full isolation between the two. If a third unit ever needs this
+same backfill, consider whether that trade-off still holds before adding a third copy versus
+finally extracting the shared logic.
 
 - **RESALAT** text: 4-line SMS (`account\namount±\nMM/DD_HH:mm\nمانده: remain`), Jalali month/day assumed current Jalali year.
   xlsx: positional `__EMPTY_N` columns (Excel export has no header names), sign of `__EMPTY_8` distinguishes payment/income.
@@ -997,7 +1016,8 @@ against `process.argv[2]`, then calls `runner` with a real
 every provider (repositories, services) the same way a controller would, just without
 HTTP. `flags` (optional, `Record<string, yargs.Options>`) are exposed as extra CLI args
 via yargs. Existing commands: `create-new-module`, `correct-timestamps`,
-`fill-payment-paid-at`, `fill-income-paid-at`, `fill-type`, `fill-amount-scale`.
+`fill-payment-paid-at`, `fill-income-paid-at`, `fill-type`, `fill-amount-scale`,
+`fill-amount-scale-hami`.
 
 `commander.ts` loads `.env` itself via `dotenv`'s `config()` — added as the very first
 lines of the file, before any other import — because unlike the real app
