@@ -17,14 +17,20 @@ debts automatically. The name "خرج" means "expense" in Persian.
   two near-identical workspaces on disk (`projects/kharj/` and `projects/kharj2/`), each
   containing its own `kharj/` (backend) and `kharjf/` (frontend) — it's easy to silently
   write into the wrong one.
-- **Database access for testing/development:** if you need to hit the database for
-  testing or local development, use the `STAGE_...` variables from `.env`
-  (`STAGE_MYSQL_HOST`, `STAGE_MYSQL_PORT`, `STAGE_MYSQL_USERNAME`,
-  `STAGE_MYSQL_PASSWORD`, `STAGE_MYSQL_DATABASE`) — never the plain `MYSQL_...`
-  variables. `databaseConfig.development` in
-  `src/common/ports/database/database.config.ts` (used whenever
-  `appConfigs.nodeEnv === 'develop'`) already reads from `STAGE_MYSQL_*`; the plain
-  `MYSQL_*` variables back `production` and point at the real database.
+- **Database access for testing/development: STAGE (`stage_kharjdb`) only, never
+  production (`kharjdb`).** Use the `STAGE_...` variables from `.env` (`STAGE_MYSQL_HOST`,
+  `STAGE_MYSQL_PORT`, `STAGE_MYSQL_USERNAME`, `STAGE_MYSQL_PASSWORD`,
+  `STAGE_MYSQL_DATABASE`) — never the plain `MYSQL_...` variables, which back the real
+  production database. See "Production vs STAGE — how this project separates them" below
+  for the full mechanism (`NODE_ENV`) and, critically, for why **checking `.env`'s
+  `NODE_ENV` value is not enough to know which database a command will hit** — several
+  npm scripts hardcode their own `NODE_ENV`, silently overriding `.env`. A real incident
+  happened from exactly this: `npm run commander <cmd>` was run believing `.env`'s
+  `NODE_ENV=develop` would route it to STAGE, but `package.json`'s `commander` script
+  hardcodes `NODE_ENV=production`, so it ran against live production data instead — the
+  STAGE-only counterpart, `commander-dev`, existed the whole time and should have been
+  used. Before running *anything* that touches a real database, check the actual npm
+  script definition in `package.json`, not just `.env`.
 - **Never kill a server you didn't start yourself** — the user may have their own
   backend/frontend running (default ports `3006`/`5173`) for their own work; killing it
   out from under them is disruptive and not yours to decide. If a default port is
@@ -58,6 +64,20 @@ debts automatically. The name "خرج" means "expense" in Persian.
   queries and starting the app against STAGE are fine, but anything that alters
   structure or rewrites existing rows is the user's call to execute, not yours —
   they may want to review the exact change first, back up data, or time it deliberately.
+  **If the user explicitly authorizes a one-off exception** ("test this on STAGE" or
+  similar), that authorization covers STAGE only, never production, and does not carry
+  over to future requests — treat every mutating command as forbidden by default unless
+  told otherwise for that specific command, that specific time. Before running it,
+  confirm the target database two ways, not one: (1) read the actual npm script
+  definition the invocation goes through (`commander-dev`, not `commander` — see
+  "Production vs STAGE" below for why `.env` alone can't tell you this), and (2) after
+  connecting, check the logged connection string/database name in the command's own
+  output before letting it proceed to the mutating part, if the command supports staging
+  that check. A real incident happened here: STAGE was verified read-only beforehand,
+  `.env`'s `NODE_ENV=develop` looked correct, and the command was run anyway via plain
+  `commander` — which hardcodes `NODE_ENV=production` in `package.json` regardless of
+  `.env` — mutating real production data (`kharjdb`) instead of STAGE
+  (`stage_kharjdb`) as intended.
 
 ---
 
@@ -300,12 +320,23 @@ src/
     │   │                                       by 10000 — accounts in any other unit are left
     │   │                                       untouched (see UncompletePayments below); never
     │   │                                       run by Claude, user-run only
-    │   └── fill-amount-scale-hami.command.ts   cmd `fill-amount-scale-hami` — identical logic
-    │                                           to `fill-amount-scale.command.ts` but scoped to
-    │                                           the `HAMI` unit symbol instead of `RIAL`; a
-    │                                           deliberate copy rather than a shared/parameterized
-    │                                           helper — see UncompletePayments below for why;
-    │                                           never run by Claude, user-run only
+    │   ├── fill-amount-scale-hami.command.ts   cmd `fill-amount-scale-hami` — identical logic
+    │   │                                       to `fill-amount-scale.command.ts` but scoped to
+    │   │                                       the `HAMI` unit symbol instead of `RIAL`; a
+    │   │                                       deliberate copy rather than a shared/parameterized
+    │   │                                       helper — see UncompletePayments below for why;
+    │   │                                       never run by Claude, user-run only
+    │   └── merge-duplicate-units.command.ts    cmd `merge-duplicate-units` — repoints every
+    │                                           account on a user-owned unit onto the general
+    │                                           (`user_id IS NULL`) unit sharing the same
+    │                                           symbol, for every symbol that has both; skips
+    │                                           (logs, does not touch) any account whose repoint
+    │                                           would collide with one already on the destination
+    │                                           unit; does not delete the now-unused duplicate
+    │                                           unit rows. **Actually run once already, by
+    │                                           accident, against production** — see "Production
+    │                                           vs STAGE" above; never run by Claude again without
+    │                                           fresh, explicit, scoped authorization
     ├── filters/
     │   └── http-exceptions.filter.ts
     ├── gaurds/
@@ -1001,9 +1032,61 @@ worktree-nested tests are never discovered regardless of what other worktrees ex
 ever reappears, first rule out both known causes before suspecting Sequelize itself: an async
 `describe` callback (previous entry) or a stray worktree somehow bypassing this ignore pattern.
 
+### Production vs STAGE — how this project separates them
+
+Everything funnels through one switch: `appConfigs.nodeEnv` (`src/app.configs.ts`), which
+reads `process.env.NODE_ENV`, **defaulting to `'develop'` if unset**. `database.module.ts`
+picks `databaseConfig.development` (→ `STAGE_MYSQL_*`, database `stage_kharjdb`) when
+`appConfigs.nodeEnv === 'develop'`, else `databaseConfig.production` (→ `MYSQL_*`,
+database `kharjdb`, the real one).
+
+**The trap: `NODE_ENV` is not something you can just read from `.env`.** Several npm
+scripts in `package.json` hardcode `NODE_ENV=<value>` as a literal prefix on the command
+line, e.g. `"commander": "NODE_ENV=production npx ts-node ..."`. A shell-level env var
+assignment like that is already set before the script's own code runs, and
+`commander.ts`'s internal `dotenv.config()` call (see below) never overrides an
+already-set variable — dotenv only fills in what's missing. So whatever `.env` says
+`NODE_ENV` should be is irrelevant once a script hardcodes its own value; the hardcoded
+value always wins. **The only reliable way to know which database a command will hit is
+to read the actual script definition in `package.json`, not `.env`.** Current scripts,
+and what each one targets:
+
+| Script | Hardcoded `NODE_ENV` | Targets |
+| --- | --- | --- |
+| `start`, `start:dev`, `start:debug` | `develop` | STAGE |
+| `start:prod` | `production` | production |
+| `commander` | `production` | **production** |
+| `commander-dev` | `develop` | STAGE |
+| `test` | *(none — `jest`, mocked repositories, no real DB)* | n/a |
+| `testc` | `develop` | STAGE |
+| `test:e2e` | `develop` | STAGE |
+
+**`commander` vs `commander-dev` is the one that matters most day to day**: both run the
+exact same `src/common/command/commander.ts` entry point and the exact same command
+files — the only difference is which `NODE_ENV` the npm script hardcodes. Any command
+run for development, testing, or verification purposes must go through `commander-dev`;
+plain `commander` is production and should only ever be run deliberately, by the user,
+as an actual production action. This distinction is *why* the STAGE-DB Working Rule
+above exists in the form it does — a command that "looks like" it's for STAGE by its
+`.env` isn't necessarily STAGE by the time it actually runs.
+
+**Migrations are separate from Commander entirely** — they don't go through
+`commander.ts` or either npm script above, and they don't use `database.config.ts`
+either. `scripts/migrate.sh` (`npx sequelize-cli db:migrate --env development` → STAGE)
+and `scripts/migrate-production.sh` (`git checkout main; npx sequelize-cli db:migrate
+--env production` → production, and forces onto `main` first as a safety check before
+touching real data) both read from `.sequelizerc`, which points sequelize-cli at
+**`src/common/ports/database/sequelize-cli.config.js`** — a separate, plain-JS file
+(sequelize-cli can't consume the app's own TypeScript config directly) that duplicates
+`database.config.ts`'s `development`/`test`/`production` shape and the same
+`STAGE_MYSQL_*`/`MYSQL_*` env var mapping, but is a genuinely different file that has to
+be kept in sync by hand — a change to one does not propagate to the other.
+
 ### Tooling — Commander CLI & Git Hooks
 
-**Commander CLI** (`src/common/command/commander.ts`, run via `npm run commander <cmd>`):
+**Commander CLI** (`src/common/command/commander.ts`, run via `npm run commander <cmd>`
+for production or `npm run commander-dev <cmd>` for STAGE — see "Production vs STAGE"
+above):
 a small yargs-based runner, not a Nest controller/route. On boot it globs
 `src/**/*.command.ts` — a command file can live anywhere in the tree (next to the
 module it operates on, e.g. `src/payment/commands/fill-paid-at.command.ts`, or under
@@ -1017,7 +1100,7 @@ every provider (repositories, services) the same way a controller would, just wi
 HTTP. `flags` (optional, `Record<string, yargs.Options>`) are exposed as extra CLI args
 via yargs. Existing commands: `create-new-module`, `correct-timestamps`,
 `fill-payment-paid-at`, `fill-income-paid-at`, `fill-type`, `fill-amount-scale`,
-`fill-amount-scale-hami`.
+`fill-amount-scale-hami`, `merge-duplicate-units`.
 
 `commander.ts` loads `.env` itself via `dotenv`'s `config()` — added as the very first
 lines of the file, before any other import — because unlike the real app
