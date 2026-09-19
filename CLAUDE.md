@@ -320,23 +320,12 @@ src/
     │   │                                       by 10000 — accounts in any other unit are left
     │   │                                       untouched (see UncompletePayments below); never
     │   │                                       run by Claude, user-run only
-    │   ├── fill-amount-scale-hami.command.ts   cmd `fill-amount-scale-hami` — identical logic
-    │   │                                       to `fill-amount-scale.command.ts` but scoped to
-    │   │                                       the `HAMI` unit symbol instead of `RIAL`; a
-    │   │                                       deliberate copy rather than a shared/parameterized
-    │   │                                       helper — see UncompletePayments below for why;
-    │   │                                       never run by Claude, user-run only
-    │   └── merge-duplicate-units.command.ts    cmd `merge-duplicate-units` — repoints every
-    │                                           account on a user-owned unit onto the general
-    │                                           (`user_id IS NULL`) unit sharing the same
-    │                                           symbol, for every symbol that has both; skips
-    │                                           (logs, does not touch) any account whose repoint
-    │                                           would collide with one already on the destination
-    │                                           unit; does not delete the now-unused duplicate
-    │                                           unit rows. **Actually run once already, by
-    │                                           accident, against production** — see "Production
-    │                                           vs STAGE" above; never run by Claude again without
-    │                                           fresh, explicit, scoped authorization
+    │   └── fill-amount-scale-hami.command.ts   cmd `fill-amount-scale-hami` — identical logic
+    │                                           to `fill-amount-scale.command.ts` but scoped to
+    │                                           the `HAMI` unit symbol instead of `RIAL`; a
+    │                                           deliberate copy rather than a shared/parameterized
+    │                                           helper — see UncompletePayments below for why;
+    │                                           never run by Claude, user-run only
     ├── filters/
     │   └── http-exceptions.filter.ts
     ├── gaurds/
@@ -1100,7 +1089,7 @@ every provider (repositories, services) the same way a controller would, just wi
 HTTP. `flags` (optional, `Record<string, yargs.Options>`) are exposed as extra CLI args
 via yargs. Existing commands: `create-new-module`, `correct-timestamps`,
 `fill-payment-paid-at`, `fill-income-paid-at`, `fill-type`, `fill-amount-scale`,
-`fill-amount-scale-hami`, `merge-duplicate-units`.
+`fill-amount-scale-hami`.
 
 `commander.ts` loads `.env` itself via `dotenv`'s `config()` — added as the very first
 lines of the file, before any other import — because unlike the real app
