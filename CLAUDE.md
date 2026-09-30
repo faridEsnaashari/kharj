@@ -540,6 +540,9 @@ side and an `Income` (category `EXCHANGE`) on the destination side.
 
 - The source account is always looked up with `userId: user.id` — you can only
   exchange money out of an account **you** manage.
+- `CreateExchangeDto.uncompletePaymentId` (optional) is set on the created source-side `Payment`,
+  which is what makes an Inbox row converted via its "Exchange" button stop appearing in
+  `GET /uncomplete-payments` (same mechanism as a normal payment conversion).
 - The destination account is looked up with `userId: toUser` (a field on
   `CreateExchangeDto`), not `user.id` — this lets the destination account be
   managed by a different (related) user's book, as long as `ownedBy: toOwner`
@@ -1633,6 +1636,12 @@ src/
 │   │   │   │                         but no visible bank name was confusing); subtitle packs
 │   │   │   │                         description (if any) + date·time + owner name into one
 │   │   │   │                         line
+│   │   │   ├── ExchangeModal.jsx   bottom-sheet for the "Exchange" button (shown on
+│   │   │   │                       PAYMENT rows only): From side is read-only from the row
+│   │   │   │                       (account, amount); To Book/Bank/Unit/Owner/Amount are
+│   │   │   │                       user-filled; Date/Time prefilled from `paidAt`; state lives
+│   │   │   │                       in hooks/useInboxExchange.js, submits `createExchange`
+│   │   │   │                       (from exchange/api) with `uncompletePaymentId`
 │   │   │   └── ConvertModal.jsx    bottom-sheet overlay (feature-local — no shared Modal
 │   │   │                           primitive exists yet, and only Inbox/Accounts need one so
 │   │   │                           far, each with its own tiny variant); dismissed via
@@ -1950,7 +1959,7 @@ import {
 `src/shared/styles/components.css` is imported once in `src/main.jsx`; individual
 components never import CSS.
 
-**Available:** `Button`/`IconButton` `Input`/`PasswordInput` `Textarea` `Select`
+**Available:** `Button`/`IconButton` `Input`/`PasswordInput`/`AmountInput` `Textarea` `Select`
 `DateField` `TimeField` `Calendar` `Field` `Form`/`FormRow` `Chip`/`ChipGroup`
 `Card`(+`CardHeader`/`CardBody`/`CardFooter`) `Badge` `Section`/`SectionHeader`
 `List`/`ListRow` `SegmentedControl` `Switch` `Avatar`/`AvatarStack` `ProgressBar`
@@ -1961,7 +1970,9 @@ Source files, one concern each:
 
 ```
 shared/components/Button.jsx      Button, IconButton
-shared/components/Input.jsx       Input, PasswordInput, Textarea, Select, Form, FormRow
+shared/components/Input.jsx       Input, PasswordInput, AmountInput (text input showing `,` thousands
+                                  separators; `onChange` gets the raw digit string, not an event;
+                                  used by every amount field), Textarea, Select, Form, FormRow
 shared/components/Field.jsx       Field — label/error/aria wiring for every control
 shared/components/DateField.jsx   DateField, TimeField
 shared/components/Calendar.jsx    Calendar (month grid)
