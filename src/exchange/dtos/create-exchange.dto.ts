@@ -9,9 +9,15 @@ export const createExchangeDtoSchema = z
     toAmount: z.number(),
     toUser: z.number(),
     paidAt: dateTimeDtoSchema.default('2020-01-01'),
+    uncompletePaymentId: z.number().optional(),
   })
-  .required();
+  .required({
+    fromAccountId: true,
+    toAccountId: true,
+    fromAmount: true,
+    toAmount: true,
+    toUser: true,
+    paidAt: true,
+  });
 
-export type CreateExchangeDto = Required<
-  z.infer<typeof createExchangeDtoSchema>
->;
+export type CreateExchangeDto = z.infer<typeof createExchangeDtoSchema>;
