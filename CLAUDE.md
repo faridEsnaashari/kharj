@@ -1637,8 +1637,9 @@ src/
 │   │   │   │                         description (if any) + date·time + owner name into one
 │   │   │   │                         line
 │   │   │   ├── ExchangeModal.jsx   bottom-sheet for the "Exchange" button (shown on
-│   │   │   │                       PAYMENT rows only): From side is read-only from the row
-│   │   │   │                       (account, amount); To Book/Bank/Unit/Owner/Amount are
+│   │   │   │                       PAYMENT rows only): From Bank/Unit/Owner/Amount
+│   │   │   │                       are prefilled from the row but editable (source account
+│   │   │   │                       re-resolved via `getAccounts`); To Book/Bank/Unit/Owner/Amount are
 │   │   │   │                       user-filled; Date/Time prefilled from `paidAt`; state lives
 │   │   │   │                       in hooks/useInboxExchange.js, submits `createExchange`
 │   │   │   │                       (from exchange/api) with `uncompletePaymentId`
