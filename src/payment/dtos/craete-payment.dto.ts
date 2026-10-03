@@ -1,9 +1,10 @@
 import { z } from 'zod';
 import { PaymentCategory } from '../enums/payment-category.enum';
 import { dateTimeDtoSchema } from 'src/common/zod-schemas/date.schema';
+import { amountDtoSchema } from 'src/common/zod-schemas/amount.schema';
 
 export const createPaymentDtoSchema = z.object({
-  price: z.number(),
+  price: amountDtoSchema,
   bankId: z.number(),
   category: z.enum(PaymentCategory),
   description: z.string().optional(),

@@ -31,6 +31,25 @@ debts automatically. The name "خرج" means "expense" in Persian.
   STAGE-only counterpart, `commander-dev`, existed the whole time and should have been
   used. Before running *anything* that touches a real database, check the actual npm
   script definition in `package.json`, not just `.env`.
+- **Every change updates the tests — unit and E2E — in the same change.** `git push` runs
+  `.husky/pre-push`: `npm run test` (unit), then `npm run test:e2e` (the specs in `test/`, real
+  STAGE database, `--runInBand`) — a push is blocked if either fails, so a stale E2E spec breaks
+  the user's next push. So for any change to an endpoint, DTO, service behaviour, validation,
+  response shape or business rule, before calling it done:
+  1. Find the affected specs (`test/*.e2e-spec.ts`) and their `test/logics/<domain>.logic.ts`
+     helpers, and update them to the new behaviour — new/changed DTO fields go into the logic
+     file's `TestX` type, a new flow gets its own `it()` in the matching spec, and a removed or
+     changed rule must not leave an assertion that still expects the old one.
+  2. Follow the E2E conventions under "Testing > E2E tests" (fresh `createTestX` per test,
+     `created.push` before `expect`, leaf-first `afterEach`, self-cleanup — never leak rows into
+     STAGE).
+  3. Update the unit specs (`*.spec.ts`) beside any changed service/logic file too.
+  4. Verify they compile and lint (`npx tsc --noEmit -p tsconfig.json`, `npx eslint <files>`) and
+     run `npm test`. **Do not run `npm run test:e2e` yourself unless the user asks** — it
+     creates and deletes real rows in STAGE (see the mutating-command rule below); say in the
+     reply which specs were added/changed and that they haven't been run.
+  5. Mention any STAGE precondition the new tests rely on (e.g. a migration the user still has to
+     run), since the pre-push hook will fail until it's done.
 - **Never kill a server you didn't start yourself** — the user may have their own
   backend/frontend running (default ports `3006`/`5173`) for their own work; killing it
   out from under them is disruptive and not yours to decide. If a default port is
@@ -894,7 +913,11 @@ Current logic files, all under `test/logics/`:
   own funded account (no debt), and a payment "for" a related user whose *own* account already
   covers it rather than needing to draw from someone else's (also no debt, but a different
   account/owner combination than the self-pay case).
-- **`exchange.logic.ts`** — unlike `payment.logic.ts`, this still does `GET /account/:id` fresh
+- **`exchange.logic.ts`** — `TestExchange` carries an optional `uncompletePaymentId`;
+  `exchange.e2e-spec.ts` covers a plain exchange, converting an Inbox row into an exchange (row
+  disappears from `GET /uncomplete-payments`), an 8-digit amount (`51043170`, the old `FLOAT`
+  rounding bug — needs the `DECIMAL` migration run on STAGE) and `amountDtoSchema` rejection
+  (`VALIDATION_ERROR`). Unlike `payment.logic.ts`, this still does `GET /account/:id` fresh
   immediately before and after the mutating call, never trusting a passed-in `Account` object's
   `ballance` for the math (the account may have been funded by an `income.logic.ts` step *after*
   it was created, so any `ballance` captured at account-creation time is stale by the time an
@@ -1116,7 +1139,8 @@ the contrast with its automatic `prepare` script):
 - `pre-commit` — `npm run lint`
 - `commit-msg` — `npx commitlint --edit "$1"` against `commitlint.config.ts`
   (Conventional Commits, same convention as the frontend's `commitlint.config.js`)
-- `pre-push` — `npm run test` then `npm run test:e2e`. This means a `git push` blocks
+- `pre-push` — `npm run test` then `npm run test:e2e` (this is why every change must update the
+  specs — see the "Every change updates the tests" Working Rule). This means a `git push` blocks
   until the **full** unit suite and the **full** E2E suite (`--runInBand`, real STAGE
   database, see E2E tests above) both pass — expect pushes to take noticeably longer
   than a commit, and to fail outright if `STAGE_MYSQL_*`/`E2E_TEST_USER_*` aren't set up
@@ -2135,6 +2159,13 @@ VITE_API_URL=http://localhost:3000
 
 ## Shared Conventions
 
+- Amount columns (`amount`, `remain`, `ballance`, `fromAmount`, `toAmount`) are `DECIMAL(20,8)`, not
+  `FLOAT` (a 32-bit float silently rounds anything past ~7 digits, e.g. `51043170` → `51043200`).
+  `dialectOptions.decimalNumbers: true` (`database.config.ts`) makes `mysql2` return them as JS
+  numbers instead of strings — which is only lossless up to ~15 significant digits, so every amount
+  DTO field uses `amountDtoSchema` (`src/common/zod-schemas/amount.schema.ts`): max 15 significant
+  digits and max 8 decimals, else `amount-precision-exceeded`. Don't add a plain `z.number()` for an
+  amount, and don't widen these limits without moving amount math off JS numbers.
 - Amounts in the DB are stored as raw numbers (no currency formatting), and are transmitted
   raw over the API too — the only place amounts are ever scaled for readability is the
   frontend's shared `Amount` component (÷10000, display-only, Rial-unit only — see its Rules

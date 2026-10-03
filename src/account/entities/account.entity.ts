@@ -59,7 +59,7 @@ export class AccountModel
   ownedBy!: number;
 
   @AllowNull(false)
-  @Column
+  @Column(DataType.DECIMAL(20, 8))
   ballance!: number;
 
   @AllowNull(false)

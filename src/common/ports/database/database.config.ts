@@ -9,6 +9,7 @@ export const databaseConfig = {
     dialectOptions: {
       typeCast: process.env.DB_TYPE_CAST !== 'false',
       dateStrings: process.env.DB_DATE_STRINGS !== 'false',
+      decimalNumbers: true,
     },
     logging: process.env.DB_LOGGING !== 'false',
   },
@@ -22,6 +23,7 @@ export const databaseConfig = {
     dialectOptions: {
       typeCast: process.env.DB_TYPE_CAST !== 'false',
       dateStrings: process.env.DB_DATE_STRINGS !== 'false',
+      decimalNumbers: true,
     },
     logging: process.env.DB_LOGGING !== 'false',
   },
@@ -35,6 +37,7 @@ export const databaseConfig = {
     dialectOptions: {
       typeCast: process.env.DB_TYPE_CAST !== 'false',
       dateStrings: process.env.DB_DATE_STRINGS !== 'false',
+      decimalNumbers: true,
     },
     logging: process.env.DB_LOGGING !== 'false',
   },
