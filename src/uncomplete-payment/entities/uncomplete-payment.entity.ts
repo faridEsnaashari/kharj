@@ -55,7 +55,7 @@ export class UncompletePaymentModel
   id!: number;
 
   @AllowNull(false)
-  @Column(DataType.FLOAT)
+  @Column(DataType.DECIMAL(20, 8))
   amount!: number;
 
   @AllowNull(false)
@@ -80,7 +80,7 @@ export class UncompletePaymentModel
   type!: UncompletePaymentType;
 
   @AllowNull(false)
-  @Column(DataType.FLOAT)
+  @Column(DataType.DECIMAL(20, 8))
   remain!: number;
 
   @CreatedAt

@@ -11,6 +11,7 @@ export type TestExchange = {
   fromAmount: Exchange['fromAmount'];
   toAmount: Exchange['toAmount'];
   paidAt: CreateExchangeDto['paidAt'];
+  uncompletePaymentId?: CreateExchangeDto['uncompletePaymentId'];
 };
 
 export function createTestExchange(makeReq: ReturnType<typeof makeAppReq>) {

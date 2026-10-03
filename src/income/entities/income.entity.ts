@@ -45,7 +45,7 @@ export class IncomeModel extends Model<Income, CreateIncome> implements Income {
   accountId!: number;
 
   @AllowNull(false)
-  @Column(DataType.FLOAT)
+  @Column(DataType.DECIMAL(20, 8))
   amount!: number;
 
   @AllowNull(false)
@@ -73,7 +73,7 @@ export class IncomeModel extends Model<Income, CreateIncome> implements Income {
   paidAt!: string;
 
   @AllowNull(true)
-  @Column(DataType.FLOAT)
+  @Column(DataType.DECIMAL(20, 8))
   remain!: number;
 
   @BelongsTo(() => AccountModel, {

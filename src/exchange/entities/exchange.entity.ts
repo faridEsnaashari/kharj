@@ -48,11 +48,11 @@ export class ExchangeModel
   incomeId!: number;
 
   @AllowNull(false)
-  @Column(DataType.FLOAT)
+  @Column(DataType.DECIMAL(20, 8))
   fromAmount!: number;
 
   @AllowNull(false)
-  @Column(DataType.FLOAT)
+  @Column(DataType.DECIMAL(20, 8))
   toAmount!: number;
 
   @CreatedAt

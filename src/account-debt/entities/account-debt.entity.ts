@@ -63,7 +63,7 @@ export class AccountDebtModel
   toUserId!: number;
 
   @AllowNull(false)
-  @Column(DataType.FLOAT)
+  @Column(DataType.DECIMAL(20, 8))
   amount!: number;
 
   @CreatedAt
